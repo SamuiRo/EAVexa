@@ -1,0 +1,28 @@
+{
+    "_comment": "Instagram Stories. Each job = 1080×1920 story.",
+    "_formats": "story = 1080×1920 px (9:16)",
+  
+    "jobs": [
+      {
+        "id":       "story_about",
+        "enabled":  true,
+        "template": "template.html",
+        "output":   "story_about.png",
+        "format":   "story"
+      },
+      {
+        "id":       "story_faq",
+        "enabled":  true,
+        "template": "template.html",
+        "output":   "story_faq.png",
+        "format":   "story"
+      },
+      {
+        "id":       "story_how_it_works",
+        "enabled":  true,
+        "template": "template.html",
+        "output":   "story_how_it_works.png",
+        "format":   "story"
+      }
+    ]
+  }

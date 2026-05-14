@@ -1,3 +1,7 @@
+data/outputs
+data/inputs/
+jobs.json
+
 # Logs
 logs
 *.log
