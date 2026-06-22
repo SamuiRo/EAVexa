@@ -1,5 +1,7 @@
 # EAVexa
 
+EAVexa can also render deterministic videos from HTML by capturing PNG frames in Playwright and encoding them with FFmpeg.
+
 PNG image generator from HTML templates. Renders posts, stories, and other formats via Playwright + Chromium — pixel-perfect, with support for custom fonts and high-res (Retina) export.
 
 ---
@@ -11,6 +13,8 @@ npm install
 npx playwright install chromium
 ```
 
+FFmpeg is bundled through `ffmpeg-static`, so video rendering works without a system FFmpeg install. Set `FFMPEG_PATH` only if you want to force a local FFmpeg binary.
+
 ---
 
 ## Usage
@@ -20,6 +24,8 @@ npm start
 ```
 
 The project reads `data/jobs.json`, finds all enabled jobs, and renders them one by one. Results are saved to `data/outputs/<job_id>/`.
+
+To render video, add a `video` block to a job. The detailed HTML animation guide is in [`docs/video_rendering.md`](docs/video_rendering.md).
 
 ---
 

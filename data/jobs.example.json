@@ -23,6 +23,20 @@
         "template": "template.html",
         "output":   "story_how_it_works.png",
         "format":   "story"
+      },
+      {
+        "id":       "animated_story",
+        "enabled":  false,
+        "template": "template.html",
+        "output":   "animated_story.mp4",
+        "format":   "story",
+        "video": {
+          "duration":    5,
+          "fps":         30,
+          "crf":         18,
+          "preset":      "medium",
+          "keep_frames": false
+        }
       }
     ]
   }
