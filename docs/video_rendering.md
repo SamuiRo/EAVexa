@@ -1,5 +1,12 @@
 # HTML to Video Rendering
 
+Related docs:
+
+- [Getting started](getting_started.md)
+- [Jobs configuration](jobs.md)
+- [HTML templates](templates.md)
+- [Troubleshooting](troubleshooting.md)
+
 EAVexa renders video in three steps:
 
 1. Opens the HTML template in Playwright.

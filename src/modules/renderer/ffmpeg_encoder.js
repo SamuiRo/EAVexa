@@ -2,8 +2,7 @@ import { spawn }       from 'child_process';
 import path            from 'path';
 import ffmpeg_static_path from 'ffmpeg-static';
 import { FFMPEG_PATH } from '../../config/app_config.js';
-
-const SUPPORTED_FORMATS = ['.mp4', '.webm', '.mov', '.mkv'];
+import { VIDEO_OUTPUT_EXTENSIONS } from '../../config/video_config.js';
 
 /**
  * Encodes PNG frame sequences into video files through FFmpeg.
@@ -47,9 +46,9 @@ export default class FfmpegEncoder {
   _get_container(output_path) {
     const container = path.extname(output_path).toLowerCase();
 
-    if (!SUPPORTED_FORMATS.includes(container)) {
+    if (!VIDEO_OUTPUT_EXTENSIONS.includes(container)) {
       throw new Error(
-        `Unsupported video format "${container}". Supported: ${SUPPORTED_FORMATS.join(', ')}`,
+        `Unsupported video format "${container}". Supported: ${VIDEO_OUTPUT_EXTENSIONS.join(', ')}`,
       );
     }
 
