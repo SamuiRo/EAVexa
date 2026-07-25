@@ -1,6 +1,11 @@
 // ─── Render formats config ────────────────────────────────────────────────────
 
 /**
+ * Output extensions the image renderer can actually produce.
+ */
+export const IMAGE_OUTPUT_EXTENSIONS = ['.png'];
+
+/**
  * Predefined output formats for social media posts and stories.
  * All dimensions are in logical CSS pixels; device_scale_factor controls DPI.
  */

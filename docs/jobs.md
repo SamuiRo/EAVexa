@@ -43,7 +43,7 @@ Jobs live in `data/jobs.json`. EAVexa reads the file, skips disabled jobs, valid
 
 ## Image Jobs
 
-An image job has no `video` block and usually outputs `.png`.
+An image job has no `video` block and must output `.png` (the only format the renderer produces).
 
 ```json
 {
@@ -89,7 +89,7 @@ A video job has a `video` block and must use one of these output extensions:
 }
 ```
 
-If `output` is a video extension but `video` is missing, EAVexa stops with a clear validation error. This prevents accidentally writing PNG bytes into a `.mp4` file.
+If `output` is a video extension but `video` is missing (or vice versa — a `video` block with a non-video/non-`.png` `output`), EAVexa stops with a clear validation error before rendering anything.
 
 ## Predefined Formats
 

@@ -14,6 +14,15 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 - [Architecture](architecture.md) - source layout, render flow, and module responsibilities.
 
+## EAVexa 2.0 — Pipeline Integration (planning)
+
+- **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,
+  webhooks і реєстр шаблонів. Пишемо код по ньому.
+- [Decisions](decisions.md) - обґрунтування ключових рішень (retention, доставка файлів,
+  bare metal, зовнішні ассети).
+- [Implementation plan](implementation_plan.md) - чернетка структури (частково застаріла).
+- [Pipeline integration plan](pipeline_integration_plan.md) - початковий аналіз розривів.
+
 ## Main Concepts
 
 EAVexa has three main concepts:

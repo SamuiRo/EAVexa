@@ -1,11 +1,12 @@
 import { mkdir, readFile, rm } from 'fs/promises';
-import { existsSync }      from 'fs';
 import { pathToFileURL }   from 'url';
 import path                from 'path';
 import { chromium }        from 'playwright';
-import { CHROME_PATH }     from '../../config/app_config.js';
+import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
 import { build_render_options } from '../../config/render_config.js';
-import { print }           from '../../shared/utils.js';
+import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
+import { apply_vars, inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
+import { print, sleep }    from '../../shared/utils.js';
 import FfmpegEncoder       from './ffmpeg_encoder.js';
 
 const DEFAULT_VIDEO_OPTIONS = {
@@ -22,6 +23,8 @@ export default class VideoRenderer {
   constructor(options = {}) {
     this.browser      = null;
     this.chrome_path  = options.chrome_path ?? CHROME_PATH;
+    this.network_timeout_ms = options.network_timeout_ms ?? NETWORK_TIMEOUT_MS;
+    this.font_timeout_ms    = options.font_timeout_ms ?? FONT_TIMEOUT_MS;
     this.settle_ms    = options.settle_ms ?? 100;
     this.encoder      = options.encoder ?? new FfmpegEncoder(options.ffmpeg ?? {});
   }
@@ -30,23 +33,11 @@ export default class VideoRenderer {
    * Launch browser and keep it available for a video batch.
    */
   async connect() {
-    const launch_opts = {
+    this.browser = await chromium.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--font-render-hinting=none',
-        '--disable-lcd-text',
-        '--force-color-profile=srgb',
-      ],
-    };
-
-    if (existsSync(this.chrome_path)) {
-      launch_opts.executablePath = this.chrome_path;
-    }
-
-    this.browser = await chromium.launch(launch_opts);
+      args: build_launch_args(),
+      executablePath: resolve_executable_path(this.chrome_path),
+    });
   }
 
   /**
@@ -74,7 +65,7 @@ export default class VideoRenderer {
     print(`Rendering video: ${path.basename(template_path)}`, 'debug');
 
     let html = await readFile(template_path, 'utf-8');
-    html = this._apply_vars(html, vars);
+    html = apply_vars(html, vars);
 
     const base_url = opts.base_url
       ?? pathToFileURL(path.dirname(template_path) + path.sep).href;
@@ -107,11 +98,12 @@ export default class VideoRenderer {
 
     try {
       context = await this.browser.newContext({
-        viewport:            render_opts.viewport,
-        device_scale_factor: render_opts.device_scale_factor,
+        viewport:          render_opts.viewport,
+        deviceScaleFactor: render_opts.device_scale_factor,
       });
 
       const page = await context.newPage();
+      page.setDefaultTimeout(this.network_timeout_ms);
 
       await mkdir(path.dirname(output_path), { recursive: true });
       await this._load_page(page, html, opts);
@@ -199,21 +191,39 @@ export default class VideoRenderer {
 
   async _load_page(page, html, opts) {
     const with_base = opts.base_url
-      ? this._inject_base_url(html, opts.base_url)
+      ? inject_base_url(html, opts.base_url)
       : html;
 
     const preloaded_html = opts.font_urls?.length
-      ? this._inject_font_preloads(with_base, opts.font_urls)
+      ? inject_font_preloads(with_base, opts.font_urls)
       : with_base;
 
     await page.setContent(preloaded_html, {
       waitUntil: 'networkidle',
+      timeout:   this.network_timeout_ms,
     });
 
-    await page.evaluate(() => document.fonts.ready);
+    await this._wait_for_fonts(page);
 
     if (this.settle_ms > 0) {
       await page.waitForTimeout(this.settle_ms);
+    }
+  }
+
+  /**
+   * Wait for document.fonts.ready, bounded by font_timeout_ms so a stuck
+   * webfont never hangs the render — proceeds with a warning instead.
+   */
+  async _wait_for_fonts(page) {
+    let timed_out = false;
+
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      sleep(this.font_timeout_ms).then(() => { timed_out = true; }),
+    ]);
+
+    if (timed_out) {
+      print(`Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is`, 'warning');
     }
   }
 
@@ -328,42 +338,5 @@ export default class VideoRenderer {
 
   _frame_name(frame_index) {
     return `frame_${String(frame_index).padStart(6, '0')}.png`;
-  }
-
-  _apply_vars(html, vars) {
-    return Object.entries(vars).reduce(
-      (acc, [key, value]) => acc.replaceAll(`{{${key}}}`, value),
-      html,
-    );
-  }
-
-  _inject_base_url(html, base_url) {
-    if (/<base\s/i.test(html)) {
-      return html;
-    }
-
-    const tag = `<base href="${this._escape_attr(base_url)}">`;
-
-    if (/<head[^>]*>/i.test(html)) {
-      return html.replace(/<head([^>]*)>/i, `<head$1>\n  ${tag}`);
-    }
-
-    return `${tag}\n${html}`;
-  }
-
-  _inject_font_preloads(html, font_urls) {
-    const tags = font_urls
-      .map(url => `<link rel="preload" href="${this._escape_attr(url)}" as="style" onload="this.rel='stylesheet'">`)
-      .join('\n  ');
-
-    return html.replace('</head>', `  ${tags}\n</head>`);
-  }
-
-  _escape_attr(value) {
-    return String(value)
-      .replaceAll('&', '&amp;')
-      .replaceAll('"', '&quot;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;');
   }
 }

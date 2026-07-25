@@ -2,6 +2,7 @@ import path         from 'path';
 import { readFile } from 'fs/promises';
 import { JOBS_FILE } from '../../config/app_config.js';
 import { VIDEO_OUTPUT_EXTENSIONS } from '../../config/video_config.js';
+import { IMAGE_OUTPUT_EXTENSIONS } from '../../config/render_config.js';
 
 /**
  * Loads and validates enabled render jobs from jobs.json.
@@ -70,6 +71,12 @@ export default class JobLoader {
     if (job.video && !VIDEO_OUTPUT_EXTENSIONS.includes(output_ext)) {
       throw new Error(
         `Job "${job.id}" has "video" config, but output must be: ${VIDEO_OUTPUT_EXTENSIONS.join(', ')}`,
+      );
+    }
+
+    if (!job.video && !IMAGE_OUTPUT_EXTENSIONS.includes(output_ext)) {
+      throw new Error(
+        `Job "${job.id}" outputs "${output_ext}", but image jobs must be: ${IMAGE_OUTPUT_EXTENSIONS.join(', ')}`,
       );
     }
   }

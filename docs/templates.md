@@ -99,6 +99,11 @@ Keep placeholder names clear and stable:
 - Good: `{{HEADLINE}}`, `{{SUBTITLE}}`, `{{CTA}}`
 - Avoid: `{{text}}`, `{{x}}`, `{{1}}`
 
+`{{KEY}}` values are HTML-escaped (`& < > " '`) before insertion — safe by default for
+plain text. To insert raw HTML (e.g. a value that legitimately contains markup), use
+triple braces: `{{{KEY}}}`. Unknown placeholders are left untouched rather than causing
+an error.
+
 ## Local Images
 
 Put images next to the template:

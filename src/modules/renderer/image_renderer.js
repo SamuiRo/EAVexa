@@ -1,10 +1,12 @@
 import { chromium }          from 'playwright';
-import { readFile, writeFile } from 'fs/promises';
-import { existsSync }         from 'fs';
+import { mkdir, readFile, writeFile } from 'fs/promises';
 import { pathToFileURL }      from 'url';
 import path                   from 'path';
 import { build_render_options } from '../../config/render_config.js';
-import { print }              from '../../shared/utils.js';
+import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
+import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
+import { apply_vars, inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
+import { print, sleep }       from '../../shared/utils.js';
 
 // ─── ImageRenderer ────────────────────────────────────────────────────────────
 
@@ -20,15 +22,13 @@ import { print }              from '../../shared/utils.js';
 export default class ImageRenderer {
   constructor(options = {}) {
     this.browser        = null;
-    this.context        = null;
 
-    // Path to Chrome/Chromium binary — falls back to system Playwright default
-    this.chrome_path    = options.chrome_path
-      ?? process.env.CHROME_PATH
-      ?? '/opt/google/chrome/chrome';
+    // Path to Chrome/Chromium binary — falls back to Playwright's bundled Chromium
+    this.chrome_path    = options.chrome_path ?? CHROME_PATH;
 
-    // Default font wait timeout in ms
-    this.font_timeout   = options.font_timeout ?? 3000;
+    // Timeouts
+    this.network_timeout_ms = options.network_timeout_ms ?? NETWORK_TIMEOUT_MS;
+    this.font_timeout_ms    = options.font_timeout_ms ?? FONT_TIMEOUT_MS;
 
     // Extra wait after page load (for animations / late repaints)
     this.settle_ms      = options.settle_ms ?? 200;
@@ -41,24 +41,11 @@ export default class ImageRenderer {
    * Call once before rendering a batch of images.
    */
   async connect() {
-    const launch_opts = {
+    this.browser = await chromium.launch({
       headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--font-render-hinting=none',   // consistent font rendering across OSes
-        '--disable-lcd-text',           // disable sub-pixel AA for pixel-perfect output
-        '--force-color-profile=srgb',   // always sRGB
-      ],
-    };
-
-    // Use explicit binary if it exists; otherwise let Playwright find its own
-    if (existsSync(this.chrome_path)) {
-      launch_opts.executablePath = this.chrome_path;
-    }
-
-    this.browser = await chromium.launch(launch_opts);
+      args: build_launch_args(),
+      executablePath: resolve_executable_path(this.chrome_path),
+    });
   }
 
   /**
@@ -80,6 +67,7 @@ export default class ImageRenderer {
    * @param {string|Object} format      Format key or { width, height, device_scale_factor }
    * @param {Object}        [opts]
    * @param {string[]}      [opts.font_urls]   Extra @font-face stylesheet URLs to preload
+   * @param {string}        [opts.base_url]    Base URL for resolving relative assets
    * @returns {Promise<Buffer>}  Raw PNG bytes
    */
   async render_html(html, format, opts = {}) {
@@ -90,25 +78,26 @@ export default class ImageRenderer {
     // Each render gets a fresh context with the correct viewport + DPR
     const context = await this.browser.newContext({
       viewport,
-      device_scale_factor,
+      deviceScaleFactor: device_scale_factor,
     });
 
     const page = await context.newPage();
+    page.setDefaultTimeout(this.network_timeout_ms);
 
     try {
-      // Inject font preload links into <head> before setting content
-      const preloaded_html = opts.font_urls?.length
-        ? this._inject_font_preloads(html, opts.font_urls)
-        : html;
+      // base_url makes relative paths (fonts, images) resolve via <base href>
+      let prepared_html = opts.base_url ? inject_base_url(html, opts.base_url) : html;
 
-      // base_url makes relative paths (fonts, images) resolve from the job's input folder
-      await page.setContent(preloaded_html, {
+      prepared_html = opts.font_urls?.length
+        ? inject_font_preloads(prepared_html, opts.font_urls)
+        : prepared_html;
+
+      await page.setContent(prepared_html, {
         waitUntil: 'networkidle',
-        ...(opts.base_url ? { url: opts.base_url } : {}),
+        timeout:   this.network_timeout_ms,
       });
 
-      // Wait for document fonts to finish loading
-      await page.evaluate(() => document.fonts.ready);
+      await this._wait_for_fonts(page);
 
       // Extra settle time for CSS transitions / late paints
       if (this.settle_ms > 0) {
@@ -143,7 +132,7 @@ export default class ImageRenderer {
     print(`Rendering: ${path.basename(template_path)}`, 'debug');
 
     let html = await readFile(template_path, 'utf-8');
-    html = this._apply_vars(html, vars);
+    html = apply_vars(html, vars);
 
     // Set base URL to the job's input folder so local assets resolve correctly
     // (local fonts via @font-face src: url('./fonts/...'), images, etc.)
@@ -151,6 +140,7 @@ export default class ImageRenderer {
 
     const png_buffer = await this.render_html(html, format, { ...opts, base_url });
 
+    await mkdir(path.dirname(output_path), { recursive: true });
     await writeFile(output_path, png_buffer);
 
     const { viewport, device_scale_factor } = build_render_options(format);
@@ -192,31 +182,19 @@ export default class ImageRenderer {
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   /**
-   * Replace {{KEY}} placeholders in HTML with values from vars object.
-   *
-   * @param {string} html
-   * @param {Object} vars
-   * @returns {string}
+   * Wait for document.fonts.ready, bounded by font_timeout_ms so a stuck
+   * webfont never hangs the render — proceeds with a warning instead.
    */
-  _apply_vars(html, vars) {
-    return Object.entries(vars).reduce(
-      (acc, [key, value]) => acc.replaceAll(`{{${key}}}`, value),
-      html,
-    );
-  }
+  async _wait_for_fonts(page) {
+    let timed_out = false;
 
-  /**
-   * Inject <link rel="preload"> tags for font stylesheets into <head>.
-   *
-   * @param {string}   html
-   * @param {string[]} font_urls
-   * @returns {string}
-   */
-  _inject_font_preloads(html, font_urls) {
-    const tags = font_urls
-      .map(url => `<link rel="preload" href="${url}" as="style" onload="this.rel='stylesheet'">`)
-      .join('\n  ');
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      sleep(this.font_timeout_ms).then(() => { timed_out = true; }),
+    ]);
 
-    return html.replace('</head>', `  ${tags}\n</head>`);
+    if (timed_out) {
+      print(`Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is`, 'warning');
+    }
   }
 }

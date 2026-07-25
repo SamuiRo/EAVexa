@@ -1,4 +1,3 @@
-import { mkdirSync } from 'fs';
 import path          from 'path';
 import { INPUTS_DIR, OUTPUT_DIR } from '../../config/app_config.js';
 
@@ -24,8 +23,6 @@ export default class RenderJobBuilder {
   build_render_job(job) {
     const job_input_dir  = path.join(this.inputs_dir, job.id);
     const job_output_dir = path.join(this.output_dir, job.id);
-
-    mkdirSync(job_output_dir, { recursive: true });
 
     return {
       template: path.join(job_input_dir, job.template),

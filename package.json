@@ -1,11 +1,22 @@
 {
   "name": "eavexa",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "PNG image generator from HTML templates",
   "type": "module",
   "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "src",
+    "templates",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "repository": {
     "type": "git",

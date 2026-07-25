@@ -1,4 +1,4 @@
-import ImageRenderer from '../renderer/ImageRenderer.js';
+import ImageRenderer from '../renderer/image_renderer.js';
 import VideoRenderer from '../renderer/video_renderer.js';
 import { print }     from '../../shared/utils.js';
 
@@ -19,19 +19,16 @@ export default class RenderOrchestrator {
    */
   async render(render_jobs) {
     const { image_jobs, video_jobs } = this.split_render_jobs(render_jobs);
-    const results = [];
 
-    if (image_jobs.length > 0) {
-      const image_results = await this.render_image_jobs(image_jobs);
-      results.push(...image_results);
-    }
+    // Image and video jobs run on separate browser connections, so they run
+    // concurrently — a long video batch no longer blocks queued images (and
+    // vice versa). Per-type ordering within each batch stays sequential.
+    const [image_results, video_results] = await Promise.all([
+      image_jobs.length > 0 ? this.render_image_jobs(image_jobs) : [],
+      video_jobs.length > 0 ? this.render_video_jobs(video_jobs) : [],
+    ]);
 
-    if (video_jobs.length > 0) {
-      const video_results = await this.render_video_jobs(video_jobs);
-      results.push(...video_results);
-    }
-
-    return results;
+    return [...image_results, ...video_results];
   }
 
   /**
