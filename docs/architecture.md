@@ -2,15 +2,17 @@
 
 EAVexa is a Node.js ESM application. It renders HTML templates through Playwright and optionally encodes video through FFmpeg.
 
-As of Крок 2 (see `docs/specification.md`), all rendering — the `eavexa` CLI, and the
+As of Крок 3 (see `docs/specification.md`), all rendering — the `eavexa` CLI, and the
 legacy `data/jobs.json` batch runner alike — goes through one core:
 `core/render_service.js`. The HTTP front-end (Крок 4) will call the same
-`RenderService.render()` used here.
+`RenderService.render()`/`.submit()` used here. Async jobs (`--callback-url`) are
+durable — a job's record and webhook delivery state live in `core/job_store.js`, not
+just in memory, so they survive a process restart (see "Jobs & Webhooks" below).
 
 ## Entry Points
 
 `src/cli/cli.js` is the `eavexa` binary (`package.json` → `bin.eavexa`). It routes to one
-of `src/cli/commands/{render,batch,templates,formats,doctor}.js`. See `docs/cli.md`.
+of `src/cli/commands/{render,batch,templates,formats,doctor,jobs}.js`. See `docs/cli.md`.
 
 `src/index.js` (`npm start`) is now a one-line alias for `eavexa batch` — the legacy
 `data/jobs.json` workflow lives entirely in `cli/commands/batch.js`:
@@ -32,7 +34,7 @@ src/
     args.js                  # dependency-free flag parser
     output.js                # stdout/stderr discipline (human / --json / -o -)
     commands/
-      render.js  batch.js  templates.js  formats.js  doctor.js
+      render.js  batch.js  templates.js  formats.js  doctor.js  jobs.js
   core/
     render_service.js       # the one render entry point behind every front-end
     render_request.js       # normalize_request(): unifies CLI/HTTP/jobs.json into one shape
@@ -41,7 +43,9 @@ src/
     storage_adapter.js      # atomic local writes, checksum, OUTPUT_DIR_ALIAS translation
     template_registry.js    # resolves template names -> manifest + HTML (user_dir overrides builtin_dir)
     template_manifest.js    # parse/infer manifests, validate_vars()
-    create_render_service.js # wires registry+pool+queue+storage — the one place that does
+    job_store.js             # one JSON file per async job, sharded by date, atomic writes
+    webhook_notifier.js      # HMAC-signed delivery with backoff retries, resumable after restart
+    create_render_service.js # wires registry+pool+queue+storage+job_store+notifier — the one place that does
     errors.js                # RenderError + error code table (http_status / exit_code)
     ids.js                   # monotonic sortable IDs (r_/j_/d_ prefixes)
   config/
@@ -80,8 +84,11 @@ src/
 | `cli/commands/templates.js` | `eavexa templates list\|show`. |
 | `cli/commands/formats.js` | `eavexa formats`. |
 | `cli/commands/doctor.js` | `eavexa doctor` — environment/dependency checks, exits `4` on failure. |
-| `core/render_service.js` | The one render entry point: loads the template, applies vars, renders via the browser pool, stores the artifact, builds the result. |
-| `core/create_render_service.js` | The one place that wires `TemplateRegistry`+`BrowserPool`+`RenderQueue`+`StorageAdapter` into a `RenderService`. |
+| `cli/commands/jobs.js` | `eavexa jobs list\|show\|cancel\|prune\|stats` — inspect/manage async job records. |
+| `core/render_service.js` | The one render entry point: `render()` (sync), `submit()`/`cancel()` (durable async jobs), `start()` (crash recovery). |
+| `core/create_render_service.js` | The one place that wires `TemplateRegistry`+`BrowserPool`+`RenderQueue`+`StorageAdapter`+`FileJobStore`+`WebhookNotifier` into a `RenderService`. |
+| `core/job_store.js` | `FileJobStore` — one JSON file per job under `data/jobs/<date>/`, atomic writes, LRU cache, cursor-paginated `list()`, `orphaned_running()`/`pending_callbacks()` for restart recovery. |
+| `core/webhook_notifier.js` | Delivers `render.completed`/`render.failed` with HMAC signing, backoff retries (1s→5s→20s→60s→300s), blocked-host guards; retry state persists in `job_store` so it survives a restart. |
 | `core/render_request.js` | `normalize_request()` — turns a raw request (jobs.json entry, future CLI/HTTP body) into one shape: resolved source, parsed format, validated vars, normalized video, cost/mode, output/options defaults. |
 | `core/render_queue.js` | Two independent concurrency lanes (`image`, `video`) so a long video render never blocks queued images. Per-task timeout and `AbortSignal` support. |
 | `core/browser_pool.js` | Pools one `image_renderer`/`video_renderer` connection each, lazily connecting, restarting every `BROWSER_MAX_RENDERS` renders. |
@@ -153,6 +160,49 @@ data/jobs.json
    moves it into place atomically (with a copy+delete fallback across drives) and
    removes temporary frames unless `keep_frames` is enabled.
 
+## Jobs & Webhooks
+
+`RenderService.submit(raw_request)` is the async counterpart to `render()`: it creates a
+durable record via `job_store.create()`, returns immediately with `{ job, done }`, and
+runs the actual render in the background through the same `_execute()` used by `render()`.
+`done` resolves once the render (and the first webhook delivery attempt, if any) settles.
+
+```text
+submit() -> job_store.create(status:'queued')
+         -> (background) status:'running' -> _execute() -> status:'done'|'failed'
+         -> notifier.notify(job_id, 'render.completed'|'render.failed')
+```
+
+Progress updates from `video_renderer.js`'s `on_progress` callback are written straight
+to the job record (`job_store.update(id, { progress })`), so polling `jobs show <id>`
+mid-render reflects the current phase/ratio.
+
+**Crash recovery** — `RenderService.start()` (called by the CLI at the top of `render`,
+`batch`, and `render --watch`) does three things before anything else runs:
+
+1. `job_store.orphaned_running()` — any job still `queued`/`running` was left there by a
+   process that died mid-render (there is no other way for that status to persist across a
+   restart, since a fresh process starts with an empty in-memory queue). Each one is marked
+   `failed` with `error.code: 'INTERRUPTED'`, and its webhook (if any) fires.
+2. `notifier.resume_pending()` — jobs whose webhook retry was scheduled by a `setTimeout`
+   in a since-exited process (retry timers are `unref()`'d, so they never keep a one-shot
+   CLI invocation alive) get a fresh delivery attempt.
+3. Orphaned `.eavexa_*` frame directories under `TMP_DIR` are removed.
+
+**Cancellation** — `RenderService.cancel(job_id)` aborts the job's `AbortSignal` (wired
+into `RenderQueue.enqueue()`) and waits for the run to actually settle before recording
+`status: 'cancelled'`, so a cancel racing against natural completion can never clobber a
+successful result. This only works within the process actually executing the job — there
+is no cross-process signal until the HTTP server (Крок 4) holds all job state in one place.
+
+**Webhook delivery** (`core/webhook_notifier.js`) — HMAC-SHA256 signs
+`"<timestamp>.<raw_body>"` into `X-EAVexa-Signature` when `WEBHOOK_SECRET` is set; retries
+on network errors, timeouts, `408`/`429`/`5xx` with backoff `1s → 5s → 20s → 60s → 300s`
+(`WEBHOOK_MAX_ATTEMPTS`, default 5); any other `4xx` is recorded `failed_permanent`
+immediately (no retry). `file:`/`ftp:` URLs and the cloud metadata address
+(`169.254.169.254`) are always blocked; `WEBHOOK_ALLOW_PRIVATE`/`WEBHOOK_ALLOWED_HOSTS`
+control everything else. Every attempt is appended to `job.callback.attempts[]`.
+
 ## Configuration Rules
 
 Environment variables are centralized in `src/config/app_config.js`. Do not read `process.env` directly in modules.
@@ -170,11 +220,16 @@ Current environment-backed settings (see `.env.example`):
 | `RENDER_CONCURRENCY` / `VIDEO_CONCURRENCY` | `RenderQueue` lane concurrency (default `3` / `1`). |
 | `QUEUE_MAX` | Max combined queued+running renders before `QUEUE_FULL` (default `100`). |
 | `RENDER_TIMEOUT_MS` | Default per-render timeout enforced by the queue (default `60000`). |
-| `SYNC_MAX_COST` | Frame-count threshold above which `normalize_request` marks a request `async` (default `90`) — informational until Крок 3's job queue exists. |
+| `SYNC_MAX_COST` | Frame-count threshold above which `normalize_request` marks a request `async` (default `90`) — the CLI doesn't act on this yet (it always calls `render()` unless `--callback-url` is given); it matters once the HTTP API (Крок 4) auto-picks sync vs. async. |
 | `MAX_WIDTH` / `MAX_HEIGHT` | Max viewport dimensions (default `4096`). |
 | `MAX_VIDEO_DURATION` / `MAX_FPS` / `MAX_FRAMES` | Video limits enforced during request normalization. |
 | `OUTPUT_DIR` / `OUTPUT_DIR_ALIAS` | Where artifacts are written, and the path a remote consumer (e.g. n8n in a container) should see instead. |
 | `TEMPLATES_DIR` / `BUILTIN_TEMPLATES_DIR` | User and builtin template registry roots. |
+| `JOB_STORE_DIR` | Where async job records live, one JSON file per job under a per-day folder (default `data/jobs`). |
+| `JOB_CACHE_SIZE` | LRU size for in-memory job records; older ones are re-read from disk (default `500`). |
+| `WEBHOOK_SECRET` | HMAC key for `X-EAVexa-Signature`. Unset = unsigned webhooks (logged once as a warning on first delivery attempt). |
+| `WEBHOOK_MAX_ATTEMPTS` / `WEBHOOK_TIMEOUT_MS` | Delivery attempts before `failed_permanent` (default `5`), per-attempt timeout (default `10000`). |
+| `WEBHOOK_ALLOW_PRIVATE` / `WEBHOOK_ALLOWED_HOSTS` | Allow localhost/LAN webhook targets (default `true` — the common n8n-on-the-same-host case), or restrict to an explicit hostname allowlist. |
 | `TMP_DIR` | Where video frames and in-progress encodes live (default `os.tmpdir()`). |
 | `TEMPLATE_ALLOWED_HOSTS` | Optional comma-separated allowlist for `source.url` template fetches (SSRF guard). |
 | `LOG_FORMAT` / `LOG_LEVEL` | `shared/logger.js` output format (`pretty`\|`json`) and minimum level. |
@@ -218,9 +273,20 @@ Runs `node --test` over `test/**/*.test.js` and `test/core/**/*.test.js`:
   path-traversal rejection;
 - `core/render_service.js` — end-to-end renders (registry and file sources) through a
   real Chromium instance, plus error-code mapping (`MISSING_REQUIRED_VAR`, `UNKNOWN_FORMAT`);
+- `core/job_store.js` — atomic writes, disk fallback when the LRU cache evicts an entry,
+  cursor pagination, `pending_callbacks()`/`orphaned_running()` queries;
+- `core/webhook_notifier.js` — HMAC signature correctness, retryable vs.
+  `failed_permanent` 4xx, backoff-then-succeed retry, blocked protocols, `resume_pending()`
+  — against a real local `http.createServer`, no mocking;
+- `core/render_service_jobs.test.js` — `submit()`/`cancel()` end-to-end, and **the Крок 3
+  acceptance scenario**: a job record manually left in `status: 'running'` (simulating a
+  killed process) is picked up by a fresh `RenderService.start()` and turns into a
+  delivered `render.failed(INTERRUPTED)` webhook;
 - `cli/args.js` — flag parsing (aliases, booleans, repeated flags, `--`);
 - `cli/commands/render.js` — spawns the real `eavexa` binary as a child process and
   asserts the actual stdout/stderr split for `--json` and `-o -`, plus exit codes;
+- `cli/commands/jobs.js` — `render --callback-url` followed by `jobs list/show/stats/prune`
+  through the real CLI binary, including that `--dry-run` prunes nothing;
 - an integration smoke test that renders real PNGs and checks the **actual** pixel
   dimensions — the regression check for the DPR bug described in `docs/specification.md`
   §12 (B1).

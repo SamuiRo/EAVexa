@@ -4,9 +4,10 @@
 `data/jobs.json` runner and, eventually, the HTTP API (Крок 4) use. Every command that
 renders goes through the same normalization, browser pool, and storage logic.
 
-> Status: Крок 2 of `docs/specification.md`. `render`, `batch`, `templates`, `formats`,
-> and `doctor` exist. `serve` and `jobs` (HTTP server, async job queue, webhooks) are not
-> implemented yet — see `docs/specification.md` §16 for the roadmap.
+> Status: Крок 3 of `docs/specification.md`. `render`, `batch`, `templates`, `formats`,
+> `doctor`, and `jobs` exist, including durable async jobs and webhook delivery
+> (`--callback-url`). The HTTP server (`serve`) is not implemented yet — see
+> `docs/specification.md` §16 for the roadmap.
 
 ## Install / run locally
 
@@ -22,11 +23,12 @@ directly (`package.json` declares `bin.eavexa`).
 ## Commands
 
 ```text
-eavexa render     [options]              # render one template
+eavexa render     [options]              # render one template (sync, or async with --callback-url)
 eavexa batch      [--jobs <path>]        # render every enabled job in data/jobs.json
 eavexa templates  <list|show> [name]
 eavexa formats
 eavexa doctor
+eavexa jobs       <list|show|cancel|prune|stats>
 ```
 
 Every command supports `--help` and, where it makes sense, `--json` for machine-readable
@@ -87,6 +89,26 @@ eavexa render -t story_faq --file ./story_faq.html --watch --open
 `--offline` (block all external requests) · `--strict-assets` (fail on any asset load
 error) · `--timeout <ms>`
 
+**Async + webhook:**
+
+| Flag | Meaning |
+| --- | --- |
+| `--callback-url <url>` | Run as a durable job (`RenderService.submit()`) and POST the result here when done, instead of blocking on the sync path |
+| `--callback-header K=V` | Extra header on the callback request (repeatable) |
+
+```bash
+eavexa render -t promo --video-duration 30 -o ./promo.mp4 \
+              --callback-url http://localhost:5678/webhook/eavexa-done
+```
+
+The job record is durable (`data/jobs/`) and the webhook is HMAC-signed (`WEBHOOK_SECRET`)
+with retries — see "Jobs & webhooks" in `docs/architecture.md` for the full mechanics.
+**This still keeps the CLI process running** until the render and first delivery attempt
+finish; there's no background daemon yet (Крок 4). What it buys you: the render request
+and the callback are decoupled from whatever *triggered* the CLI call, and a failed
+delivery is retried durably rather than lost — see "Using from n8n today" below for when
+that's actually useful versus just using the plain sync path.
+
 **Output mode:**
 
 `--json` · `--quiet` · `--verbose`
@@ -142,6 +164,24 @@ eavexa doctor
 eavexa doctor --json
 ```
 
+## `eavexa jobs`
+
+Inspect and manage the async job records created by `render --callback-url`.
+
+```bash
+eavexa jobs list [--status done] [--limit 20] [--json]
+eavexa jobs show <id>
+eavexa jobs cancel <id>
+eavexa jobs prune [--older-than 30d] [--status failed] [--keep-last 500] [--dry-run]
+eavexa jobs stats
+```
+
+`prune` deletes both the job record **and** its result file — it is the manual retention
+mechanism until `RETENTION_MODE` (Крок 6) exists. `--dry-run` reports what would be
+deleted without touching anything. `cancel` can only interrupt a render that is still
+running in the very same OS process; against a job from a different (or already-exited)
+process it just marks the stored record `cancelled`.
+
 ## Using from n8n today
 
 Without an HTTP server yet (Крок 4), the reliable integration point is **Execute Command**
@@ -155,5 +195,22 @@ calling `eavexa render ... --json`, parsing the single JSON line for `result.pat
 → [Read/Write Files from Disk] ← {{ $json.path }}
 ```
 
-Long video renders block the Execute Command node for the render's full duration — there
-is no async/webhook path until job queue + HTTP land in Крок 3/4.
+Long video renders block the Execute Command node for the render's full duration.
+
+**A note on `--callback-url` from n8n specifically:** it does *not* make n8n's Execute
+Command node return sooner — that node waits for the child process to exit either way, and
+`--callback-url` keeps the CLI process alive until delivery, not shorter. Its actual value
+today is for renders triggered **outside** n8n — a cron job, Windows Task Scheduler, or any
+other script — that should notify an n8n workflow when done without n8n having to poll or
+hold a connection open:
+
+```text
+[Task Scheduler / cron] → eavexa render -t promo --video-duration 30 -o ./promo.mp4 \
+                                          --callback-url {{n8n Webhook node URL}}
+                                          (this process runs and exits on its own)
+
+[n8n: Webhook node] → receives render.completed/render.failed → [IF] → ...
+```
+
+A genuine non-blocking request/response flow *from* n8n (send a request, get an
+immediate acknowledgement, get called back later) needs the HTTP server in Крок 4.

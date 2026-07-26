@@ -20,6 +20,9 @@ export const TEMPLATES_DIR = process.env.TEMPLATES_DIR ?? path.join(DATA_DIR, 't
 
 export const TMP_DIR = process.env.TMP_DIR ?? os.tmpdir();
 
+export const JOB_STORE_DIR = process.env.JOB_STORE_DIR ?? path.join(DATA_DIR, 'jobs');
+export const JOB_CACHE_SIZE = Number(process.env.JOB_CACHE_SIZE ?? 500);
+
 // ─── Chromium / FFmpeg ───────────────────────────────────────────────────────
 
 export const CHROME_PATH    = process.env.CHROME_PATH ?? null;
@@ -52,6 +55,16 @@ export const QUEUE_MAX          = Number(process.env.QUEUE_MAX ?? 100);
 
 export const TEMPLATE_ALLOWED_HOSTS = process.env.TEMPLATE_ALLOWED_HOSTS
   ? process.env.TEMPLATE_ALLOWED_HOSTS.split(',').map(host => host.trim())
+  : null;
+
+// ─── Webhooks ────────────────────────────────────────────────────────────────
+
+export const WEBHOOK_SECRET       = process.env.WEBHOOK_SECRET ?? null;
+export const WEBHOOK_MAX_ATTEMPTS = Number(process.env.WEBHOOK_MAX_ATTEMPTS ?? 5);
+export const WEBHOOK_TIMEOUT_MS   = Number(process.env.WEBHOOK_TIMEOUT_MS ?? 10000);
+export const WEBHOOK_ALLOW_PRIVATE = (process.env.WEBHOOK_ALLOW_PRIVATE ?? 'true') === 'true';
+export const WEBHOOK_ALLOWED_HOSTS = process.env.WEBHOOK_ALLOWED_HOSTS
+  ? process.env.WEBHOOK_ALLOWED_HOSTS.split(',').map(host => host.trim())
   : null;
 
 // ─── Logging ─────────────────────────────────────────────────────────────────

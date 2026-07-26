@@ -17,8 +17,9 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 ## EAVexa 2.0 — Pipeline Integration (in progress)
 
-Status: Крок 0-2 done (fixes, core, CLI). Крок 3+ (job queue, webhooks, HTTP server) not
-started — see [specification.md](specification.md) §16 for the full plan.
+Status: Крок 0-3 done (fixes, core, CLI, async jobs + webhooks). Крок 4+ (HTTP server,
+deployment docs, S3/push drivers) not started — see [specification.md](specification.md)
+§16 for the full plan.
 
 - **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,
   webhooks і реєстр шаблонів. Пишемо код по ньому.

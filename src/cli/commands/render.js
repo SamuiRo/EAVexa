@@ -37,6 +37,8 @@ Options:
       --offline                 Block all external network requests
       --strict-assets           Fail the render if any asset fails to load
       --timeout <ms>            Override the render timeout
+      --callback-url <url>      Render as an async job; POST the result here when done
+      --callback-header K=V     Extra header on the callback request (repeatable)
       --json                    Print one JSON result line to stdout
       --quiet                   Suppress informational output
       --verbose                 Show debug-level output
@@ -48,7 +50,15 @@ Examples:
   eavexa render -t story_pricing_pro --var TITLE="Launch week" -o ./out.png
   eavexa render --file ./my.html --format story -o ./out.png
   cat my.html | eavexa render --stdin --format story -o - > out.png
-  eavexa render -t promo --video-duration 8 --fps 30 -o ./promo.mp4`;
+  eavexa render -t promo --video-duration 8 --fps 30 -o ./promo.mp4
+  eavexa render -t promo --video-duration 30 -o ./promo.mp4 \\
+                --callback-url http://localhost:5678/webhook/eavexa-done
+
+Note: --callback-url keeps this process alive until the render (and the
+first webhook delivery attempt) finish — there is no background daemon yet
+(that lands with the HTTP server in Крок 4). A failed delivery still
+schedules a retry durably in the job store, resumed the next time any
+"eavexa" command runs and calls RenderService.start().`;
 
 export default async function render_command(argv) {
   const args = parse_args(argv, { aliases: ALIASES, booleans: BOOLEANS });
@@ -90,8 +100,14 @@ export default async function render_command(argv) {
 
 async function run_single(raw_request, args, output, raw_stdout) {
   const service = create_render_service();
+  await service.start();
 
   try {
+    if (raw_request.callback_url) {
+      await run_async(service, raw_request, output);
+      return;
+    }
+
     output.info('Rendering...');
     const result = await service.render(raw_request, {});
 
@@ -104,6 +120,30 @@ async function run_single(raw_request, args, output, raw_stdout) {
   } finally {
     await service.close();
   }
+}
+
+/**
+ * --callback-url path: submit as a durable job, wait for it (and the first
+ * webhook attempt) to settle, then report the final job record. The process
+ * intentionally stays alive for this — see the note in HELP above.
+ */
+async function run_async(service, raw_request, output) {
+  const { job, done } = await service.submit(raw_request);
+  output.info(`Job ${job.id} queued (async) — will POST to ${raw_request.callback_url} on completion.`);
+
+  await done;
+  const final = await service.job_store.get(job.id);
+
+  if (final.status === 'done') {
+    output.success(summarize(final.result));
+    output.result(final);
+    return;
+  }
+
+  const error = new RenderError(final.error?.code ?? 'INTERNAL', final.error?.message ?? 'Job failed', final.error?.details);
+  output.error(error);
+  output.result(final);
+  process.exitCode = error.exit_code;
 }
 
 async function run_dry_run(raw_request, output) {
@@ -132,6 +172,7 @@ async function run_watch(raw_request, args, output) {
 
   const { watch } = await import('fs');
   const service = create_render_service();
+  await service.start();
   let opened = false;
   let rendering = false;
   let pending = false;
@@ -178,7 +219,27 @@ async function build_request_from_flags(args) {
       strict_assets: !!args['strict-assets'],
       ...(args.timeout !== undefined ? { timeout_ms: Number(args.timeout) } : {}),
     },
+    ...(args['callback-url'] ? {
+      callback_url: args['callback-url'],
+      callback_headers: build_callback_headers(args),
+    } : {}),
   };
+}
+
+function build_callback_headers(args) {
+  const headers = {};
+
+  for (const entry of as_array(args['callback-header'])) {
+    const eq_index = entry.indexOf('=');
+
+    if (eq_index === -1) {
+      throw new RenderError('INVALID_REQUEST', `Invalid --callback-header "${entry}", expected KEY=VALUE`);
+    }
+
+    headers[entry.slice(0, eq_index)] = entry.slice(eq_index + 1);
+  }
+
+  return headers;
 }
 
 async function resolve_source(args) {

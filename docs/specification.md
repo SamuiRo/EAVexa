@@ -975,40 +975,48 @@ eavexa render -t story_faq --watch --open       # ре-рендер при зм�
 
 ## 16. Порядок реалізації
 
-### Крок 0 — Фікси та фундамент (0.5–1 д)
-- [ ] B1–B11 з §12
-- [ ] `node --test` + smoke-тест на фактичні пікселі
-- [ ] `package.json`: `bin`, `engines`, `files`, скрипти
-- [ ] `.env.example`
+### Крок 0 — Фікси та фундамент (0.5–1 д) ✅
+- [x] B1–B11 з §12
+- [x] `node --test` + smoke-тест на фактичні пікселі
+- [x] `package.json`: `bin`, `engines`, `files`, скрипти
+- [x] `.env.example`
 - **Готово, коли:** `npm test` зелений, PNG має правильний реальний розмір.
 
-### Крок 1 — Ядро (1.5–2 д)
-- [ ] `errors.js`, `ids.js`, `shared/logger.js`
-- [ ] `template_manifest.js` + `template_registry.js` (+ інференс)
-- [ ] `render_request.js` — нормалізація для всіх фронтів
-- [ ] `browser_pool.js`, `render_queue.js` (дві смуги)
-- [ ] `storage_adapter.js` (`local` + аліас + атомарний запис + checksum)
-- [ ] `render_service.js` — поки лише `render()`
-- [ ] `on_progress` у `VideoRenderer`
-- [ ] `RenderOrchestrator` → через `RenderService`
+### Крок 1 — Ядро (1.5–2 д) ✅
+- [x] `errors.js`, `ids.js`, `shared/logger.js`
+- [x] `template_manifest.js` + `template_registry.js` (+ інференс)
+- [x] `render_request.js` — нормалізація для всіх фронтів
+- [x] `browser_pool.js`, `render_queue.js` (дві смуги)
+- [x] `storage_adapter.js` (`local` + аліас + атомарний запис + checksum)
+- [x] `render_service.js` — поки лише `render()`
+- [x] `on_progress` у `VideoRenderer`
+- [x] `RenderOrchestrator` → через `RenderService`
 - **Готово, коли:** `npm start` працює як раніше, але через нове ядро.
+- Відхилення від букви специфікації: `browser_pool.js` пулить цілі
+  `image_renderer`/`video_renderer`, а не сирі Playwright-сторінки (§5.6) —
+  свідомий компроміс, щоб не переписувати вже протестовані рендерери.
 
-### Крок 2 — CLI (1 д)
-- [ ] `args.js`, `output.js`, `cli.js`
-- [ ] `render`, `batch`, `formats`, `templates list|show`, `doctor`
-- [ ] дисципліна stdout/stderr, `--json`, `-o -`, коди виходу
-- [ ] `--watch`
-- [ ] `docs/cli.md`
+### Крок 2 — CLI (1 д) ✅
+- [x] `args.js`, `output.js`, `cli.js`
+- [x] `render`, `batch`, `formats`, `templates list|show`, `doctor`
+- [x] дисципліна stdout/stderr, `--json`, `-o -`, коди виходу
+- [x] `--watch`
+- [x] `docs/cli.md`
 - **Готово, коли:** `eavexa render … --json | jq` дає чистий JSON; **проєкт уже придатний до вжитку**.
 
-### Крок 3 — Джоби та webhooks (1.5 д)
-- [ ] `job_store.js` (`File` + `Memory`)
-- [ ] `webhook_notifier.js` (HMAC, ретраї, `resume_pending`)
-- [ ] `RenderService.submit()` + прогрес
-- [ ] відновлення у `start()`
-- [ ] `--callback-url` у CLI
-- [ ] `eavexa jobs list|show|cancel|prune|stats`
+### Крок 3 — Джоби та webhooks (1.5 д) ✅
+- [x] `job_store.js` (тільки `File` — `Memory`-варіант не знадобився: тести
+      використовують `FileJobStore` у тимчасовій директорії, що досить швидко)
+- [x] `webhook_notifier.js` (HMAC, ретраї, `resume_pending`)
+- [x] `RenderService.submit()` + прогрес
+- [x] відновлення у `start()`
+- [x] `--callback-url` у CLI
+- [x] `eavexa jobs list|show|cancel|prune|stats`
 - **Готово, коли:** вбити процес під час рендеру → після старту прилітає `render.failed`.
+  Перевірено тестом, що імітує «осиротілий» джоб (`test/core/render_service_jobs.test.js`).
+- Відоме обмеження: `jobs cancel` перериває рендер лише в межах того самого
+  процесу (немає між-процесного сигналу до появи HTTP-сервера в Кроці 4);
+  проти джоба з іншого процесу він просто позначає запис скасованим.
 
 ### Крок 4 — HTTP (1.5 д)
 - [ ] `server.js`, `router.js`, middleware

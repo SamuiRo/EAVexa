@@ -33,9 +33,11 @@ export default async function batch_command(argv) {
   const job_loader = new JobLoader(args.jobs ? { jobs_file: args.jobs } : {});
   const render_job_builder = new RenderJobBuilder();
   const reporter = new RenderResultReporter();
-  const orchestrator = new RenderOrchestrator({ render_service: create_render_service() });
+  const render_service = create_render_service();
+  const orchestrator = new RenderOrchestrator({ render_service });
 
   try {
+    await render_service.start();
     output.show_banner(WELCOME_MESSAGE, SUB_TITLE);
 
     output.info('Loading jobs from data/jobs.json');

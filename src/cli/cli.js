@@ -4,6 +4,7 @@ import batch_command from './commands/batch.js';
 import templates_command from './commands/templates.js';
 import formats_command from './commands/formats.js';
 import doctor_command from './commands/doctor.js';
+import jobs_command from './commands/jobs.js';
 import { RenderError } from '../core/errors.js';
 
 const COMMANDS = {
@@ -12,6 +13,7 @@ const COMMANDS = {
   templates: templates_command,
   formats: formats_command,
   doctor: doctor_command,
+  jobs: jobs_command,
 };
 
 const HELP = `EAVexa — render HTML templates to PNG images and MP4/WebM/MOV/MKV videos.
@@ -24,6 +26,7 @@ Commands:
   templates   list | show <name>
   formats     List available output format presets
   doctor      Check the local environment (Chromium, FFmpeg, paths)
+  jobs        list | show | cancel | prune | stats — async job records
 
 Run "eavexa <command> --help" for command-specific options.`;
 
