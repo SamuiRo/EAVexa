@@ -67,6 +67,18 @@ export const WEBHOOK_ALLOWED_HOSTS = process.env.WEBHOOK_ALLOWED_HOSTS
   ? process.env.WEBHOOK_ALLOWED_HOSTS.split(',').map(host => host.trim())
   : null;
 
+// ─── HTTP server ─────────────────────────────────────────────────────────────
+
+export const EAVEXA_PORT   = Number(process.env.EAVEXA_PORT ?? 8080);
+export const EAVEXA_HOST   = process.env.EAVEXA_HOST ?? '127.0.0.1';
+export const EAVEXA_API_KEY = process.env.EAVEXA_API_KEY ?? null;
+export const EAVEXA_PUBLIC_URL = process.env.EAVEXA_PUBLIC_URL ?? null;
+
+export const MAX_BODY_MB       = Number(process.env.MAX_BODY_MB ?? 10);
+export const SHUTDOWN_GRACE_MS = Number(process.env.SHUTDOWN_GRACE_MS ?? 30000);
+export const IDEMPOTENCY_TTL_MS = Number(process.env.IDEMPOTENCY_TTL_MS ?? 600000);
+export const RESULT_TOKEN_SECRET = process.env.RESULT_TOKEN_SECRET ?? null;
+
 // ─── Logging ─────────────────────────────────────────────────────────────────
 
 export const LOG_FORMAT = process.env.LOG_FORMAT ?? 'pretty'; // pretty | json

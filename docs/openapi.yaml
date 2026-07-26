@@ -1,0 +1,302 @@
+openapi: 3.0.3
+info:
+  title: EAVexa HTTP API
+  description: >
+    Render HTML templates to PNG images and MP4/WebM/MOV/MKV videos.
+    See docs/api.md for narrative documentation and n8n examples.
+  version: "2.0"
+servers:
+  - url: http://localhost:8080
+security:
+  - ApiKeyAuth: []
+  - {}
+paths:
+  /v1/render:
+    post:
+      summary: Render a template (sync or async)
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema: { type: string }
+          required: false
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RenderRequest' }
+      responses:
+        '200':
+          description: Sync render completed (binary bytes, or JSON per output.type)
+        '202':
+          description: Accepted — rendering in the background
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AsyncAccepted' }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /v1/templates/{name}/render:
+    post:
+      summary: Render a template — body is just the vars object
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+        - in: query
+          name: format
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string, enum: [binary, base64, url, path] }
+        - in: query
+          name: mode
+          schema: { type: string, enum: [sync, async] }
+        - in: query
+          name: callback_url
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200': { description: Sync result }
+        '202': { description: Accepted }
+  /v1/jobs:
+    get:
+      summary: List job records, newest first
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string, enum: [queued, running, done, failed, cancelled] }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 50 }
+        - in: query
+          name: before
+          schema: { type: string }
+        - in: query
+          name: after
+          schema: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  jobs:
+                    type: array
+                    items: { $ref: '#/components/schemas/Job' }
+  /v1/jobs/{id}:
+    get:
+      summary: Get one job's status/progress/result
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters: [ { $ref: '#/components/parameters/JobId' } ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  job: { $ref: '#/components/schemas/Job' }
+        '404': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Cancel (if running) or delete (if finished)
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters: [ { $ref: '#/components/parameters/JobId' } ]
+      responses:
+        '200': { description: Cancelled or deleted }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/jobs/{id}/result:
+    get:
+      summary: Stream the rendered artifact
+      security: [ { ApiKeyAuth: [] }, { ResultToken: [] }, {} ]
+      parameters:
+        - { $ref: '#/components/parameters/JobId' }
+        - in: header
+          name: Range
+          schema: { type: string }
+        - in: header
+          name: If-None-Match
+          schema: { type: string }
+        - in: query
+          name: token
+          schema: { type: string }
+      responses:
+        '200': { description: Full artifact }
+        '206': { description: Partial content (Range) }
+        '304': { description: Not modified (If-None-Match) }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '410': { description: Result was removed from disk }
+  /v1/jobs/{id}/retry-callback:
+    post:
+      summary: Force a fresh webhook delivery attempt
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters: [ { $ref: '#/components/parameters/JobId' } ]
+      responses:
+        '200': { description: Retry attempted }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/templates:
+    get:
+      summary: List templates in the registry
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: query
+          name: tag
+          schema: { type: string }
+        - in: query
+          name: kind
+          schema: { type: string, enum: [image, video, both] }
+        - in: query
+          name: refresh
+          schema: { type: string, enum: ['1'] }
+      responses:
+        '200': { description: OK }
+  /v1/templates/{name}:
+    get:
+      summary: Full manifest for a template
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/templates/{name}/preview:
+    get:
+      summary: Static preview.png for a template, if it has one
+      security: [ { ApiKeyAuth: [] }, {} ]
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: PNG bytes }
+        '404': { $ref: '#/components/responses/Error' }
+  /v1/formats:
+    get:
+      summary: Built-in output format presets
+      security: [ { ApiKeyAuth: [] }, {} ]
+      responses:
+        '200': { description: OK }
+  /v1/version:
+    get:
+      summary: eavexa / Node / Playwright versions
+      security: [ { ApiKeyAuth: [] }, {} ]
+      responses:
+        '200': { description: OK }
+  /healthz:
+    get:
+      summary: Liveness probe (always open)
+      security: []
+      responses:
+        '200': { description: Process is up }
+  /readyz:
+    get:
+      summary: Readiness probe (503 if the render queue is saturated)
+      security: [ { ApiKeyAuth: [] }, {} ]
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not ready — queue saturated }
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Required on every /v1/* route only when EAVEXA_API_KEY is set.
+    ResultToken:
+      type: apiKey
+      in: query
+      name: token
+      description: Signed one-time alternative to X-API-Key, GET /v1/jobs/:id/result only.
+  parameters:
+    JobId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+  responses:
+    Error:
+      description: Error envelope
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    RenderRequest:
+      type: object
+      required: [source]
+      properties:
+        source:
+          type: object
+          description: Exactly one of name/html/path/url
+          properties:
+            name: { type: string }
+            html: { type: string }
+            path: { type: string }
+            url: { type: string }
+        format:
+          description: Preset key, "WxH@dpr", or {width,height,device_scale_factor}
+        vars: { type: object, additionalProperties: true }
+        video: { type: object, nullable: true }
+        output: { type: object }
+        options: { type: object }
+        callback_url: { type: string }
+        callback_headers: { type: object }
+        metadata: { type: object, additionalProperties: true }
+        mode: { type: string, enum: [sync, async] }
+    AsyncAccepted:
+      type: object
+      properties:
+        ok: { type: boolean }
+        job_id: { type: string }
+        status: { type: string }
+        queue_position: { type: integer }
+        estimate_ms: { type: integer, nullable: true }
+        poll_url: { type: string }
+        result_url: { type: string }
+    Job:
+      type: object
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [queued, running, done, failed, cancelled] }
+        mode: { type: string, enum: [sync, async] }
+        progress:
+          type: object
+          properties:
+            phase: { type: string }
+            current: { type: integer }
+            total: { type: integer }
+            ratio: { type: number }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time, nullable: true }
+        finished_at: { type: string, format: date-time, nullable: true }
+        template: { type: string, nullable: true }
+        type: { type: string, enum: [image, video] }
+        metadata: { type: object, additionalProperties: true }
+        result: { type: object, nullable: true }
+        error: { type: object, nullable: true }
+        callback: { type: object, nullable: true }
+    ErrorEnvelope:
+      type: object
+      properties:
+        ok: { type: boolean, enum: [false] }
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: { type: object, additionalProperties: true }
+            request_id: { type: string }

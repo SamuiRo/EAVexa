@@ -1,13 +1,13 @@
 # CLI
 
 `eavexa` is a thin front-end over `core/render_service.js` — the same core the legacy
-`data/jobs.json` runner and, eventually, the HTTP API (Крок 4) use. Every command that
-renders goes through the same normalization, browser pool, and storage logic.
+`data/jobs.json` runner and the HTTP API (`docs/api.md`) use. Every command that renders
+goes through the same normalization, browser pool, and storage logic.
 
-> Status: Крок 3 of `docs/specification.md`. `render`, `batch`, `templates`, `formats`,
-> `doctor`, and `jobs` exist, including durable async jobs and webhook delivery
-> (`--callback-url`). The HTTP server (`serve`) is not implemented yet — see
-> `docs/specification.md` §16 for the roadmap.
+> Status: Крок 4 of `docs/specification.md`. Every command exists, including `serve`
+> (the HTTP API). For a genuine non-blocking request/response flow from n8n, prefer
+> `eavexa serve` + `docs/api.md` over the Execute Command approach below — see "Using
+> from n8n today" for when each makes sense.
 
 ## Install / run locally
 
@@ -29,6 +29,7 @@ eavexa templates  <list|show> [name]
 eavexa formats
 eavexa doctor
 eavexa jobs       <list|show|cancel|prune|stats>
+eavexa serve      [--port 8080]           # HTTP API — see docs/api.md
 ```
 
 Every command supports `--help` and, where it makes sense, `--json` for machine-readable
@@ -182,10 +183,26 @@ deleted without touching anything. `cancel` can only interrupt a render that is 
 running in the very same OS process; against a job from a different (or already-exited)
 process it just marks the stored record `cancelled`.
 
+## `eavexa serve`
+
+Starts the HTTP API — `POST /v1/render`, `GET /v1/jobs/*`, etc. Full reference:
+`docs/api.md` (+ `docs/openapi.yaml`).
+
+```bash
+eavexa serve --port 8080
+```
+
+`SIGTERM`/`SIGINT` trigger a graceful shutdown: stop accepting new connections, wait up to
+`SHUTDOWN_GRACE_MS` for in-flight renders, close the browser pool, exit.
+
 ## Using from n8n today
 
-Without an HTTP server yet (Крок 4), the reliable integration point is **Execute Command**
-calling `eavexa render ... --json`, parsing the single JSON line for `result.path`:
+**Prefer `eavexa serve` (`docs/api.md`) for anything n8n-initiated** — it's a real
+non-blocking request/response, unlike either CLI option below.
+
+The CLI remains useful for renders triggered by something other than an n8n HTTP node —
+**Execute Command** calling `eavexa render ... --json`, parsing the single JSON line for
+`result.path`:
 
 ```text
 [Schedule] → [Execute Command]
@@ -195,14 +212,16 @@ calling `eavexa render ... --json`, parsing the single JSON line for `result.pat
 → [Read/Write Files from Disk] ← {{ $json.path }}
 ```
 
-Long video renders block the Execute Command node for the render's full duration.
+Long video renders block the Execute Command node for the render's full duration — with
+`eavexa serve` running, an **HTTP Request** node hitting `POST /v1/render` with
+`callback_url` avoids that entirely (see `docs/api.md` → "Using from n8n").
 
-**A note on `--callback-url` from n8n specifically:** it does *not* make n8n's Execute
-Command node return sooner — that node waits for the child process to exit either way, and
+**A note on `--callback-url` from n8n's Execute Command specifically:** it does *not* make
+that node return sooner — it waits for the child process to exit either way, and
 `--callback-url` keeps the CLI process alive until delivery, not shorter. Its actual value
-today is for renders triggered **outside** n8n — a cron job, Windows Task Scheduler, or any
-other script — that should notify an n8n workflow when done without n8n having to poll or
-hold a connection open:
+is for renders triggered **outside** n8n entirely — a cron job, Windows Task Scheduler, or
+any other script — that should notify an n8n workflow when done without n8n having to poll
+or hold a connection open:
 
 ```text
 [Task Scheduler / cron] → eavexa render -t promo --video-duration 30 -o ./promo.mp4 \
@@ -212,5 +231,6 @@ hold a connection open:
 [n8n: Webhook node] → receives render.completed/render.failed → [IF] → ...
 ```
 
-A genuine non-blocking request/response flow *from* n8n (send a request, get an
-immediate acknowledgement, get called back later) needs the HTTP server in Крок 4.
+For a genuine non-blocking request/response flow *from* n8n itself (send a request, get
+an immediate acknowledgement, get called back later), use `eavexa serve` — see
+`docs/api.md` → "Using from n8n".

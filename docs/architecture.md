@@ -2,17 +2,21 @@
 
 EAVexa is a Node.js ESM application. It renders HTML templates through Playwright and optionally encodes video through FFmpeg.
 
-As of Крок 3 (see `docs/specification.md`), all rendering — the `eavexa` CLI, and the
-legacy `data/jobs.json` batch runner alike — goes through one core:
-`core/render_service.js`. The HTTP front-end (Крок 4) will call the same
-`RenderService.render()`/`.submit()` used here. Async jobs (`--callback-url`) are
-durable — a job's record and webhook delivery state live in `core/job_store.js`, not
+As of Крок 4 (see `docs/specification.md`), all rendering — the `eavexa` CLI, the HTTP
+server, and the legacy `data/jobs.json` batch runner alike — goes through one core:
+`core/render_service.js`. Async jobs (`--callback-url`, or HTTP requests that qualify)
+are durable — a job's record and webhook delivery state live in `core/job_store.js`, not
 just in memory, so they survive a process restart (see "Jobs & Webhooks" below).
 
 ## Entry Points
 
 `src/cli/cli.js` is the `eavexa` binary (`package.json` → `bin.eavexa`). It routes to one
-of `src/cli/commands/{render,batch,templates,formats,doctor,jobs}.js`. See `docs/cli.md`.
+of `src/cli/commands/{render,batch,templates,formats,doctor,jobs,serve}.js`. See `docs/cli.md`.
+
+`src/server/server.js` (`EAVexaServer`, started via `eavexa serve`) exposes the same core
+over HTTP — `POST /v1/render`, `GET /v1/jobs/*`, etc. See `docs/api.md`. Every HTTP request
+goes through the identical `normalize_request()` → `RenderService.render()`/`.submit()`
+path the CLI uses; the server adds routing, auth, streaming, and lifecycle on top.
 
 `src/index.js` (`npm start`) is now a one-line alias for `eavexa batch` — the legacy
 `data/jobs.json` workflow lives entirely in `cli/commands/batch.js`:
@@ -34,7 +38,16 @@ src/
     args.js                  # dependency-free flag parser
     output.js                # stdout/stderr discipline (human / --json / -o -)
     commands/
-      render.js  batch.js  templates.js  formats.js  doctor.js  jobs.js
+      render.js  batch.js  templates.js  formats.js  doctor.js  jobs.js  serve.js
+  server/
+    server.js                # EAVexaServer: node:http, lifecycle, graceful shutdown
+    router.js                # minimal method+path router with :params
+    public_url.js            # resolves the base URL for result.url / poll_url
+    idempotency_store.js     # in-memory Idempotency-Key -> response cache
+    middleware/
+      request_id.js  auth.js  limits.js  errors.js
+    routes/
+      render.js  jobs.js  templates.js  meta.js
   core/
     render_service.js       # the one render entry point behind every front-end
     render_request.js       # normalize_request(): unifies CLI/HTTP/jobs.json into one shape
@@ -45,6 +58,7 @@ src/
     template_manifest.js    # parse/infer manifests, validate_vars()
     job_store.js             # one JSON file per async job, sharded by date, atomic writes
     webhook_notifier.js      # HMAC-signed delivery with backoff retries, resumable after restart
+    result_token.js          # signed short-lived ?token= for /result links, gated on RESULT_TOKEN_SECRET
     create_render_service.js # wires registry+pool+queue+storage+job_store+notifier — the one place that does
     errors.js                # RenderError + error code table (http_status / exit_code)
     ids.js                   # monotonic sortable IDs (r_/j_/d_ prefixes)
@@ -85,11 +99,22 @@ src/
 | `cli/commands/formats.js` | `eavexa formats`. |
 | `cli/commands/doctor.js` | `eavexa doctor` — environment/dependency checks, exits `4` on failure. |
 | `cli/commands/jobs.js` | `eavexa jobs list\|show\|cancel\|prune\|stats` — inspect/manage async job records. |
+| `cli/commands/serve.js` | `eavexa serve` — starts `EAVexaServer`, wires `SIGTERM`/`SIGINT` to graceful shutdown. |
+| `server/server.js` | `EAVexaServer` — node:http wrapper: request routing, auth, graceful shutdown, ties every route module together. |
+| `server/router.js` | Minimal method+path router with `:param` segments — no dependencies. |
+| `server/public_url.js` | Resolves the base URL for `result.url`/`poll_url` (`EAVEXA_PUBLIC_URL`, else `Host`/`X-Forwarded-*`). |
+| `server/idempotency_store.js` | In-memory `Idempotency-Key` → response cache, TTL-bounded. |
+| `server/middleware/*.js` | `request_id` (X-Request-Id), `auth` (X-API-Key), `limits` (body size + JSON parsing), `errors` (RenderError → §7.7 JSON envelope). |
+| `server/routes/render.js` | `POST /v1/render`, `POST /v1/templates/:name/render` — sync/async branching, idempotency, persists a job record for sync HTTP renders too. |
+| `server/routes/jobs.js` | `GET /v1/jobs`, `GET /v1/jobs/:id`, `GET /v1/jobs/:id/result` (streamed, Range/ETag), `DELETE /v1/jobs/:id`, `POST /v1/jobs/:id/retry-callback`. |
+| `server/routes/templates.js` | `GET /v1/templates`, `GET /v1/templates/:name`, `GET /v1/templates/:name/preview` (serves the static `preview.png`). |
+| `server/routes/meta.js` | `GET /v1/formats`, `GET /v1/version`, `GET /healthz`, `GET /readyz`. |
 | `core/render_service.js` | The one render entry point: `render()` (sync), `submit()`/`cancel()` (durable async jobs), `start()` (crash recovery). |
 | `core/create_render_service.js` | The one place that wires `TemplateRegistry`+`BrowserPool`+`RenderQueue`+`StorageAdapter`+`FileJobStore`+`WebhookNotifier` into a `RenderService`. |
 | `core/job_store.js` | `FileJobStore` — one JSON file per job under `data/jobs/<date>/`, atomic writes, LRU cache, cursor-paginated `list()`, `orphaned_running()`/`pending_callbacks()` for restart recovery. |
-| `core/webhook_notifier.js` | Delivers `render.completed`/`render.failed` with HMAC signing, backoff retries (1s→5s→20s→60s→300s), blocked-host guards; retry state persists in `job_store` so it survives a restart. |
-| `core/render_request.js` | `normalize_request()` — turns a raw request (jobs.json entry, future CLI/HTTP body) into one shape: resolved source, parsed format, validated vars, normalized video, cost/mode, output/options defaults. |
+| `core/webhook_notifier.js` | Delivers `render.completed`/`render.failed` with HMAC signing, backoff retries (1s→5s→20s→60s→300s), blocked-host guards; retry state persists in `job_store` so it survives a restart. `force:true` bypasses the delivered/failed_permanent guard for manual retries. |
+| `core/result_token.js` | `sign_result_token()`/`verify_result_token()` — HMAC-signed, expiring `?token=` for `GET /v1/jobs/:id/result`, gated on `RESULT_TOKEN_SECRET`. |
+| `core/render_request.js` | `normalize_request()` — turns a raw request (jobs.json entry, CLI flags, HTTP body) into one shape: resolved source, parsed format, validated vars, normalized video, cost/mode, output/options defaults (rejects `output.type: s3\|push` — Крок 6). |
 | `core/render_queue.js` | Two independent concurrency lanes (`image`, `video`) so a long video render never blocks queued images. Per-task timeout and `AbortSignal` support. |
 | `core/browser_pool.js` | Pools one `image_renderer`/`video_renderer` connection each, lazily connecting, restarting every `BROWSER_MAX_RENDERS` renders. |
 | `core/storage_adapter.js` | Local driver: dated (or explicit) directory layout, atomic `.part` → `rename`, streamed SHA-256 checksum, `.meta.json` sidecar, `OUTPUT_DIR_ALIAS` path translation. |
@@ -192,8 +217,10 @@ mid-render reflects the current phase/ratio.
 **Cancellation** — `RenderService.cancel(job_id)` aborts the job's `AbortSignal` (wired
 into `RenderQueue.enqueue()`) and waits for the run to actually settle before recording
 `status: 'cancelled'`, so a cancel racing against natural completion can never clobber a
-successful result. This only works within the process actually executing the job — there
-is no cross-process signal until the HTTP server (Крок 4) holds all job state in one place.
+successful result. This only works within the process actually executing the job. Since
+`eavexa serve` is a single process holding all job state, `DELETE /v1/jobs/:id` is fully
+reliable there — the limitation only bites across separate CLI invocations, which don't
+share memory.
 
 **Webhook delivery** (`core/webhook_notifier.js`) — HMAC-SHA256 signs
 `"<timestamp>.<raw_body>"` into `X-EAVexa-Signature` when `WEBHOOK_SECRET` is set; retries
@@ -202,6 +229,43 @@ on network errors, timeouts, `408`/`429`/`5xx` with backoff `1s → 5s → 20s �
 immediately (no retry). `file:`/`ftp:` URLs and the cloud metadata address
 (`169.254.169.254`) are always blocked; `WEBHOOK_ALLOW_PRIVATE`/`WEBHOOK_ALLOWED_HOSTS`
 control everything else. Every attempt is appended to `job.callback.attempts[]`.
+`POST /v1/jobs/:id/retry-callback` (and the equivalent CLI-less internal call) passes
+`force: true`, the one way to re-attempt a `delivered`/`failed_permanent` callback.
+
+## HTTP Server
+
+`EAVexaServer` (`server/server.js`) is a thin `node:http` wrapper: a request comes in,
+`server/router.js` matches it to a handler in `server/routes/*.js`, which builds a raw
+request and calls `RenderService.render()`/`.submit()` — the exact same core the CLI uses.
+
+A few things exist only at this layer, deliberately kept out of `core/` because they need
+an actual inbound HTTP request to make sense:
+
+- **`result.url`** — `core/render_service.js` builds it from
+  `request.origin.public_base_url` (see `server/public_url.js`:
+  `EAVEXA_PUBLIC_URL` if set, else the request's own `Host`/`X-Forwarded-*`). CLI/jobs.json
+  renders never set `origin.public_base_url`, so `result.url` stays `null` for them — this
+  is intentional (`docs/decisions.md` §Р2.1), not a bug.
+- **A job record for every sync HTTP render.** `server/routes/render.js` persists a
+  `done` job keyed by `result.render_id` after a synchronous `POST /v1/render`/
+  `POST /v1/templates/:name/render`, purely so the `result.url` it just handed back is a
+  real, fetchable `GET /v1/jobs/:render_id/result` link. The CLI and `data/jobs.json`
+  paths don't do this — there's no URL to make real.
+- **`Idempotency-Key`** (`server/idempotency_store.js`) — an in-memory, TTL-bounded cache
+  keyed by the header value alone (no request-body fingerprinting). A repeat within
+  `IDEMPOTENCY_TTL_MS` replays the original job/result instead of rendering again.
+- **`?token=` on `GET /v1/jobs/:id/result`** (`core/result_token.js`) — an HMAC-signed,
+  expiring alternative to `X-API-Key` so a result link can be shared standalone. Disabled
+  entirely (never verifies) unless `RESULT_TOKEN_SECRET` is set.
+- **Streaming** — `GET /v1/jobs/:id/result` always uses `fs.createReadStream`, supports
+  `Range` (`206`) and `ETag`/`If-None-Match` (`304`), and never compresses (there is no
+  compression middleware anywhere in this server).
+- **Graceful shutdown** — `EAVexaServer.close()` stops accepting new connections
+  (`http.Server.close()`), polls `RenderQueue.stats()` until it's empty or
+  `SHUTDOWN_GRACE_MS` elapses, then closes the browser pool. Wired to `SIGTERM`/`SIGINT`
+  by `cli/commands/serve.js`; idempotent and directly unit-tested (`test/server/shutdown.test.js`)
+  rather than relying on OS signal delivery, which is unreliable to script in tests
+  (especially on Windows).
 
 ## Configuration Rules
 
@@ -232,6 +296,13 @@ Current environment-backed settings (see `.env.example`):
 | `WEBHOOK_ALLOW_PRIVATE` / `WEBHOOK_ALLOWED_HOSTS` | Allow localhost/LAN webhook targets (default `true` — the common n8n-on-the-same-host case), or restrict to an explicit hostname allowlist. |
 | `TMP_DIR` | Where video frames and in-progress encodes live (default `os.tmpdir()`). |
 | `TEMPLATE_ALLOWED_HOSTS` | Optional comma-separated allowlist for `source.url` template fetches (SSRF guard). |
+| `EAVEXA_PORT` / `EAVEXA_HOST` | `eavexa serve` bind address (default `8080` / `127.0.0.1`). |
+| `EAVEXA_API_KEY` | If set, every `/v1/*` route requires a matching `X-API-Key`. Unset = open access. |
+| `EAVEXA_PUBLIC_URL` | Overrides the inferred base URL for `result.url`/`poll_url` — needed behind a reverse proxy or in a container where `Host` isn't reliable. |
+| `MAX_BODY_MB` | Max HTTP request body size before `PAYLOAD_TOO_LARGE` (default `10`). |
+| `SHUTDOWN_GRACE_MS` | How long graceful shutdown waits for in-flight renders (default `30000`). |
+| `IDEMPOTENCY_TTL_MS` | `Idempotency-Key` replay window (default `600000` = 10 min). |
+| `RESULT_TOKEN_SECRET` | HMAC key for signed `?token=` result links. Unset = `?token=` never verifies. |
 | `LOG_FORMAT` / `LOG_LEVEL` | `shared/logger.js` output format (`pretty`\|`json`) and minimum level. |
 
 ## Adding A New Output Format
@@ -287,6 +358,19 @@ Runs `node --test` over `test/**/*.test.js` and `test/core/**/*.test.js`:
   asserts the actual stdout/stderr split for `--json` and `-o -`, plus exit codes;
 - `cli/commands/jobs.js` — `render --callback-url` followed by `jobs list/show/stats/prune`
   through the real CLI binary, including that `--dry-run` prunes nothing;
+- `server/router.js` — path-param extraction, `method_not_allowed` vs. no-match, static
+  vs. dynamic segment precedence;
+- `server/server.test.js` — a real `EAVexaServer` hit with `fetch`: sync binary/base64/path
+  responses with correct headers, `result.url` round-tripping back through
+  `GET /v1/jobs/:id/result`, async `202` → webhook delivery, `Range`/`ETag`/`304`,
+  `Idempotency-Key` replay, `DELETE` cancel-vs-delete, `output.type: s3` rejection, and
+  `retry-callback` bypassing the `failed_permanent` guard;
+- `server/shutdown.test.js` — `close()` drains an in-flight render before closing the
+  browser pool, gives up cleanly after `grace_ms` when nothing's running, and is safe to
+  call twice — tested by calling the method directly rather than sending OS signals;
+- `server/auth.test.js` — a real `eavexa serve` child process with `EAVEXA_API_KEY` set:
+  401 without/with-wrong key, 200 with the right one, `/healthz` staying open, and a
+  `?token=` signed with `RESULT_TOKEN_SECRET` substituting for the key on `/result`;
 - an integration smoke test that renders real PNGs and checks the **actual** pixel
   dimensions — the regression check for the DPR bug described in `docs/specification.md`
   §12 (B1).

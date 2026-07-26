@@ -5,6 +5,7 @@ import templates_command from './commands/templates.js';
 import formats_command from './commands/formats.js';
 import doctor_command from './commands/doctor.js';
 import jobs_command from './commands/jobs.js';
+import serve_command from './commands/serve.js';
 import { RenderError } from '../core/errors.js';
 
 const COMMANDS = {
@@ -14,6 +15,7 @@ const COMMANDS = {
   formats: formats_command,
   doctor: doctor_command,
   jobs: jobs_command,
+  serve: serve_command,
 };
 
 const HELP = `EAVexa — render HTML templates to PNG images and MP4/WebM/MOV/MKV videos.
@@ -27,6 +29,7 @@ Commands:
   formats     List available output format presets
   doctor      Check the local environment (Chromium, FFmpeg, paths)
   jobs        list | show | cancel | prune | stats — async job records
+  serve       Start the HTTP API server (see docs/api.md)
 
 Run "eavexa <command> --help" for command-specific options.`;
 

@@ -1018,14 +1018,28 @@ eavexa render -t story_faq --watch --open       # ре-рендер при зм�
   процесу (немає між-процесного сигналу до появи HTTP-сервера в Кроці 4);
   проти джоба з іншого процесу він просто позначає запис скасованим.
 
-### Крок 4 — HTTP (1.5 д)
-- [ ] `server.js`, `router.js`, middleware
-- [ ] `/v1/render`, `/v1/jobs/*`, `/v1/templates/*`, `/v1/formats`, `/healthz`, `/readyz`
-- [ ] стрімінг `/result` з `Range` і `ETag`
-- [ ] `Idempotency-Key`, graceful shutdown
-- [ ] `eavexa serve`
-- [ ] `docs/api.md` + `openapi.yaml`
+### Крок 4 — HTTP (1.5 д) ✅
+- [x] `server.js`, `router.js`, middleware
+- [x] `/v1/render`, `/v1/jobs/*`, `/v1/templates/*`, `/v1/formats`, `/healthz`, `/readyz`
+- [x] стрімінг `/result` з `Range` і `ETag`
+- [x] `Idempotency-Key`, graceful shutdown
+- [x] `eavexa serve`
+- [x] `docs/api.md` + `openapi.yaml`
 - **Готово, коли:** повний цикл з n8n на тій самій машині працює через `result.path`.
+  Перевірено вручну (`curl` end-to-end: sync binary/JSON, async + webhook, `GET /result`
+  з `Range`/`ETag`/`304`) і автотестами (`test/server/`, 30+ тестів).
+- Свідомі спрощення проти букви специфікації:
+  - `/readyz` перевіряє лише насиченість черги (`QUEUE_MAX`), не живучість
+    Chromium/FFmpeg напряму — це вже покриває `eavexa doctor`, який може дозволити
+    собі спавнити процеси; `/readyz` викликається часто і має бути дешевим.
+  - `GET /v1/templates/:name/preview` віддає статичний `preview.png` шаблону
+    (як і описано в §9.1 — це вкладений asset, не рендер), а не рендерить/кешує
+    щось на льоту.
+  - `Idempotency-Key` кешується лише за значенням заголовка, без звірки тіла
+    запиту — повторний виклик з тим самим ключем але іншим тілом поверне
+    перший результат.
+  - `output.type: "s3"`/`"push"` свідомо відхиляються з `INVALID_REQUEST`
+    (Крок 6, ще не реалізовано) замість тихого прийняття.
 
 ### Крок 5 — Розгортання та документація (0.5–1 д)
 - [ ] `docs/deployment.md`: **спершу bare metal** (systemd / Windows service / pm2), потім Docker

@@ -41,7 +41,13 @@ export default class WebhookNotifier {
   /**
    * Trigger delivery for a job that just finished. No-op if the job has no callback.
    */
-  async notify(job_id, event) {
+  /**
+   * @param {string} job_id
+   * @param {string} event
+   * @param {{ force?: boolean }} [opts] `force` bypasses the delivered/failed_permanent
+   *   guard — used by the manual `POST /v1/jobs/:id/retry-callback` endpoint.
+   */
+  async notify(job_id, event, { force = false } = {}) {
     const job = await this.job_store.get(job_id);
     if (!job?.callback) return;
 
@@ -50,7 +56,7 @@ export default class WebhookNotifier {
       log({ level: 'warn', msg: 'WEBHOOK_SECRET is not set — outgoing webhooks will not carry X-EAVexa-Signature' });
     }
 
-    await this._attempt(job_id, event, 1);
+    await this._attempt(job_id, event, 1, force);
   }
 
   /**
@@ -74,9 +80,10 @@ export default class WebhookNotifier {
 
   // ─── Internals ──────────────────────────────────────────────────────────
 
-  async _attempt(job_id, event, attempt_number) {
+  async _attempt(job_id, event, attempt_number, force = false) {
     const job = await this.job_store.get(job_id);
-    if (!job?.callback || job.callback.state === 'delivered' || job.callback.state === 'failed_permanent') return;
+    if (!job?.callback) return;
+    if (!force && (job.callback.state === 'delivered' || job.callback.state === 'failed_permanent')) return;
 
     let host_error = null;
 

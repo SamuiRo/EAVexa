@@ -326,7 +326,10 @@ export default class RenderService {
     return { width: format.width, height: format.height, device_scale_factor: format.device_scale_factor };
   }
 
-  _build_result(request, stored, media, started_at) {
+  async _build_result(request, stored, media, started_at) {
+    const url = stored.url ?? this._build_result_url(request);
+    const data = request.output.type === 'base64' ? (await readFile(stored.local_path)).toString('base64') : null;
+
     return {
       render_id: request.render_id,
       ...media,
@@ -336,10 +339,22 @@ export default class RenderService {
       storage:  stored.storage,
       path:     stored.path,
       local_path: stored.local_path,
-      url:      stored.url,
-      data:     null,
+      url,
+      data,
       timings:  { total_ms: Date.now() - started_at },
       metadata: request.metadata,
     };
+  }
+
+  /**
+   * Build an absolute link to GET /v1/jobs/:render_id/result — only possible
+   * when the caller told us its own public URL (set by the HTTP layer on the
+   * request's `origin`; CLI/jobs.json renders leave this null on purpose,
+   * see docs/decisions.md Р2.1). The HTTP layer is responsible for actually
+   * persisting a job record under this id so the link resolves.
+   */
+  _build_result_url(request) {
+    if (!request.origin?.public_base_url) return null;
+    return `${request.origin.public_base_url}/v1/jobs/${request.render_id}/result`;
   }
 }

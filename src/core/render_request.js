@@ -211,9 +211,24 @@ function decide_mode(raw, cost) {
 
 // ─── Output / options ──────────────────────────────────────────────────────
 
+// s3/push drivers are Крок 6 work (docs/specification.md §16) — reject early
+// rather than silently accepting a request nothing can fulfill.
+const SUPPORTED_OUTPUT_TYPES = ['binary', 'base64', 'url', 'path'];
+const PLANNED_OUTPUT_TYPES   = ['s3', 'push'];
+
 function normalize_output(raw_output = {}, render_id, video) {
+  const type = raw_output.type ?? 'binary';
+
+  if (PLANNED_OUTPUT_TYPES.includes(type)) {
+    throw new RenderError('INVALID_REQUEST', `output.type "${type}" is not implemented yet (planned for Крок 6)`, { type });
+  }
+
+  if (!SUPPORTED_OUTPUT_TYPES.includes(type)) {
+    throw new RenderError('INVALID_REQUEST', `Unknown output.type "${type}". Supported: ${SUPPORTED_OUTPUT_TYPES.join(', ')}`, { type });
+  }
+
   return {
-    type:     raw_output.type ?? 'binary',
+    type,
     filename: raw_output.filename ?? `${render_id}.${video ? 'mp4' : 'png'}`,
     dir:      raw_output.dir ?? null,
     s3:       raw_output.s3 ?? null,
