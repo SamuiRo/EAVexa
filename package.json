@@ -1,6 +1,6 @@
 {
   "name": "eavexa",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "PNG image generator from HTML templates",
   "type": "module",
   "main": "src/index.js",

@@ -220,7 +220,9 @@ afford to spawn processes) — a deliberate scope simplification.
 ## Using from n8n
 
 This is the flow the CLI's Execute Command approach couldn't offer: a real non-blocking
-request that returns immediately and calls back later.
+request that returns immediately and calls back later. **`docs/n8n.md` has ready-to-import
+workflow JSON for both patterns below**, plus troubleshooting; this section is the quick
+reference.
 
 **Image — synchronous, one node:**
 

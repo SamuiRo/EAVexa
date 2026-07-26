@@ -7,8 +7,10 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 - [Getting started](getting_started.md) - install, configure, and run the renderer.
 - [CLI](cli.md) - `eavexa render`/`batch`/`templates`/`formats`/`doctor`/`jobs`/`serve`, one-off and pipeline use.
 - [HTTP API](api.md) - `eavexa serve`: `/v1/render`, `/v1/jobs/*`, webhooks, n8n examples.
+- [Deployment](deployment.md) - bare metal (systemd/NSSM/Task Scheduler/pm2) and Docker.
+- [n8n integration](n8n.md) - ready-to-import workflows for sync and async rendering.
 - [Jobs configuration](jobs.md) - every supported `data/jobs.json` field.
-- [HTML templates](templates.md) - how to structure HTML, assets, fonts, and placeholders.
+- [HTML templates](templates.md) - how to structure HTML, assets, fonts, placeholders, and the `template.json` manifest.
 - [HTML to video rendering](video_rendering.md) - deterministic animation rendering and FFmpeg output.
 - [Troubleshooting](troubleshooting.md) - common failures and fixes.
 
@@ -18,8 +20,8 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 ## EAVexa 2.0 — Pipeline Integration (in progress)
 
-Status: Крок 0-4 done (fixes, core, CLI, async jobs + webhooks, HTTP server). Крок 5+
-(deployment docs, Docker, S3/push drivers) not started — see
+Status: Крок 0-5 done (fixes, core, CLI, async jobs + webhooks, HTTP server, deployment
+docs). Крок 6 (S3/push drivers, `/metrics`, rate limiting, CI) not started — see
 [specification.md](specification.md) §16 for the full plan.
 
 - **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,

@@ -2,9 +2,10 @@
 
 Templates are normal HTML files. EAVexa opens them in Playwright Chromium, waits for the page and fonts, then captures the result.
 
-## Location
+## Two ways templates are organized
 
-Every job has its own folder:
+**Legacy — `data/jobs.json` / `eavexa batch`:** every job has its own folder under
+`data/inputs/<job_id>/`, referenced by filename from the job entry:
 
 ```text
 data/inputs/<job_id>/
@@ -13,14 +14,75 @@ data/inputs/<job_id>/
   images/
 ```
 
-The job config points to the template filename:
-
 ```json
 {
   "id": "weekly_tip",
   "template": "template.html"
 }
 ```
+
+**Registry — `eavexa render -t <name>`, `eavexa templates`, and the HTTP API's
+`source.name`:** a named directory under `templates/` (builtin, checked into git) or
+`data/templates/` (user-added; overrides a builtin template of the same name):
+
+```text
+templates/story_pricing_pro/        (or data/templates/story_pricing_pro/)
+  template.json                     # optional manifest — see below
+  template.html
+  preview.png                       # optional — served by GET /v1/templates/:name/preview
+  fonts/
+  images/
+```
+
+Both paths end up in the exact same place: an HTML file, substituted the same way
+(`{{KEY}}` escaped, `{{{KEY}}}` raw), rendered by the same renderer. Everything below this
+point — placeholders, assets, fonts, layout — applies identically to either.
+
+## Template Manifest (`template.json`)
+
+Optional. Without one, EAVexa **infers** a manifest: `name` from the directory name,
+`entry` = `template.html` (or the one `.html` file present if there's exactly one),
+`vars` = every unique `{{KEY}}`/`{{{KEY}}}` found in the HTML (all treated as optional
+strings), `kind: "both"`. `eavexa templates show <name>` and `GET /v1/templates/:name`
+both mark an inferred manifest with `"inferred": true` — this means **every existing
+template already works through the registry with zero changes.**
+
+Add a `template.json` to declare a proper variable schema, restrict which formats make
+sense, or default video settings:
+
+```jsonc
+{
+  "name": "story_pricing_pro",
+  "title": "Pricing — Pro plan",
+  "description": "Instagram story with the Pro tier price",
+  "version": "1.0.0",
+  "entry": "template.html",
+  "kind": "image",                       // image | video | both
+  "network": "required",                 // required | optional | none — informational only, not enforced
+  "default_format": "story",
+  "supported_formats": ["story", "post_portrait"],
+  "video": { "duration": 5, "fps": 30 }, // default video block when the caller doesn't send one
+  "vars": [
+    { "name": "TITLE", "type": "string", "required": true,
+      "description": "Headline", "example": "Launch week", "max_length": 60 },
+    { "name": "PRICE", "type": "string", "required": true, "example": "$29" },
+    { "name": "SUBTITLE", "type": "string", "required": false, "default": "" }
+  ],
+  "tags": ["pricing", "story", "en"]
+}
+```
+
+`vars[]` fields: `name` (required), `type` (`string|number|boolean|color|url|html` —
+informational/validated for length only, not coerced), `required`, `default` (used when
+the var is omitted), `example` (documentation only — shown by `templates show` /
+`GET /v1/templates/:name`, for whoever is about to call the template), `max_length`,
+`description`. A required var with no value throws `MISSING_REQUIRED_VAR` before any
+rendering happens — this is what makes the HTTP API and CLI fail fast with a clear
+message instead of silently rendering `{{PRICE}}` literally onto the image.
+
+`preview.png` (optional) is a plain static image you commit alongside the template — it
+is **not** rendered on demand or cached; `GET /v1/templates/:name/preview` just streams
+that file as-is. If it's missing, the endpoint 404s.
 
 ## Minimal Template
 

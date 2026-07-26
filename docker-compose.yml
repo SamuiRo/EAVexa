@@ -1,0 +1,43 @@
+version: '3.8'
+
+# Secondary deployment path — see docs/deployment.md for why bare metal is
+# recommended first. This compose file wires EAVexa and n8n together with a
+# shared volume so `result.path` resolves identically in both containers
+# (same mount path on both sides — no OUTPUT_DIR_ALIAS needed).
+
+services:
+  eavexa:
+    build: .
+    init: true          # reaps zombie Chromium/FFmpeg child processes
+    shm_size: 1gb        # Chromium needs real /dev/shm, Docker's 64MB default crashes it
+    ports:
+      - "8080:8080"
+    volumes:
+      - eavexa_output:/data/outputs
+      - eavexa_jobs:/data/jobs
+    environment:
+      EAVEXA_HOST: 0.0.0.0
+      OUTPUT_DIR: /data/outputs
+      JOB_STORE_DIR: /data/jobs
+      EAVEXA_API_KEY: ${EAVEXA_API_KEY:-}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-}
+      # OUTPUT_DIR_ALIAS: /different/path/n8n/sees   # only needed if n8n mounts
+      #                                               # the shared volume at a
+      #                                               # different path than /data/outputs
+    restart: unless-stopped
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - eavexa_output:/data/outputs   # same path as the eavexa service — no alias needed
+    environment:
+      N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+    restart: unless-stopped
+
+volumes:
+  eavexa_output:
+  eavexa_jobs:
+  n8n_data:

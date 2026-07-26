@@ -1,0 +1,66 @@
+{
+  "name": "EAVexa - Sync Image",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When clicking \"Execute workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "title", "name": "title", "type": "string", "value": "Launch week" },
+            { "id": "price", "name": "price", "type": "string", "value": "$29" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sample-data",
+      "name": "Sample row (replace with Google Sheets / DB node)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/v1/templates/story_pricing_pro/render",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.EAVEXA_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"TITLE\": $json.title, \"PRICE\": $json.price } }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "render-image",
+      "name": "Render image (EAVexa)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute workflow\"": {
+      "main": [[{ "node": "Sample row (replace with Google Sheets / DB node)", "type": "main", "index": 0 }]]
+    },
+    "Sample row (replace with Google Sheets / DB node)": {
+      "main": [[{ "node": "Render image (EAVexa)", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": { "instanceId": "eavexa-docs-example" }
+}

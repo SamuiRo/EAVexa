@@ -1041,11 +1041,20 @@ eavexa render -t story_faq --watch --open       # ре-рендер при зм�
   - `output.type: "s3"`/`"push"` свідомо відхиляються з `INVALID_REQUEST`
     (Крок 6, ще не реалізовано) замість тихого прийняття.
 
-### Крок 5 — Розгортання та документація (0.5–1 д)
-- [ ] `docs/deployment.md`: **спершу bare metal** (systemd / Windows service / pm2), потім Docker
-- [ ] `Dockerfile` + `docker-compose.yml` (eavexa + n8n)
-- [ ] `docs/n8n.md` + готові workflow-JSON (sync-картинка, async-відео)
-- [ ] `docs/templates.md` — маніфест
+### Крок 5 — Розгортання та документація (0.5–1 д) ✅
+- [x] `docs/deployment.md`: **спершу bare metal** (systemd / Windows service / pm2), потім Docker
+- [x] `Dockerfile` + `docker-compose.yml` (eavexa + n8n)
+- [x] `docs/n8n.md` + готові workflow-JSON (sync-картинка, async-відео)
+- [x] `docs/templates.md` — маніфест
+- Не перевірено збіркою: `docker compose up --build` не запускався в цьому середовищі
+  (Docker тут недоступний) — конфіги написані за стандартним паттерном
+  (`mcr.microsoft.com/playwright` база + спільний том), але варто прогнати
+  `docker compose up -d --build` та `docker compose exec eavexa node src/cli/cli.js doctor`
+  на машині з Docker перед тим, як покладатися на цей шлях у проді.
+- n8n workflow JSON (`docs/n8n/*.json`) написані вручну за відомою мені схемою нод
+  n8n, не експортовані з реального інстансу — можуть знадобитись дрібні правки полів
+  залежно від версії n8n; `docs/n8n.md` містить текстовий опис кожної ноди як
+  авторитетний fallback.
 
 ### Крок 6 — Полірування (1 д)
 - [ ] `s3` і `push` драйвери, `/metrics`, rate limit

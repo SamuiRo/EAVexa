@@ -1,0 +1,125 @@
+{
+  "name": "EAVexa - Async Video",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When clicking \"Execute workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "row_id", "name": "row_id", "type": "string", "value": "42" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "sample-data",
+      "name": "Sample row (replace with your trigger data)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:8080/v1/render",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-API-Key", "value": "={{ $env.EAVEXA_API_KEY }}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"source\": {\"name\": \"promo\"}, \"video\": {\"duration\": 30}, \"callback_url\": $execution.resumeUrl, \"metadata\": {\"row_id\": $json.row_id} } }}",
+        "options": {}
+      },
+      "id": "submit-render",
+      "name": "Submit render (EAVexa)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {}
+      },
+      "id": "wait-for-callback",
+      "name": "Wait: On Webhook Call",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [860, 300],
+      "webhookId": "eavexa-async-video-resume"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "event-check",
+              "leftValue": "={{ $json.body.event }}",
+              "rightValue": "render.completed",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-event",
+      "name": "IF render.completed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1080, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "fileSelector": "={{ $json.body.result.path }}",
+        "options": {}
+      },
+      "id": "read-file",
+      "name": "Read result from disk",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [1300, 200]
+    },
+    {
+      "parameters": {},
+      "id": "handle-failure",
+      "name": "Handle render.failed (add alerting here)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1300, 420]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute workflow\"": {
+      "main": [[{ "node": "Sample row (replace with your trigger data)", "type": "main", "index": 0 }]]
+    },
+    "Sample row (replace with your trigger data)": {
+      "main": [[{ "node": "Submit render (EAVexa)", "type": "main", "index": 0 }]]
+    },
+    "Submit render (EAVexa)": {
+      "main": [[{ "node": "Wait: On Webhook Call", "type": "main", "index": 0 }]]
+    },
+    "Wait: On Webhook Call": {
+      "main": [[{ "node": "IF render.completed", "type": "main", "index": 0 }]]
+    },
+    "IF render.completed": {
+      "main": [
+        [{ "node": "Read result from disk", "type": "main", "index": 0 }],
+        [{ "node": "Handle render.failed (add alerting here)", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": { "instanceId": "eavexa-docs-example" }
+}

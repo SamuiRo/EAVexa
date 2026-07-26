@@ -142,7 +142,7 @@ src/
 
 Three front-ends build a raw request and hand it to the same `RenderService.render()`:
 `eavexa render` (flags -> request), `eavexa batch` / `data/jobs.json` (one request per
-job via `RenderJobBuilder`), and — once Крок 4 lands — the HTTP API.
+job via `RenderJobBuilder`), and `eavexa serve` (`server/routes/render.js`).
 
 ```text
 data/jobs.json
@@ -284,7 +284,7 @@ Current environment-backed settings (see `.env.example`):
 | `RENDER_CONCURRENCY` / `VIDEO_CONCURRENCY` | `RenderQueue` lane concurrency (default `3` / `1`). |
 | `QUEUE_MAX` | Max combined queued+running renders before `QUEUE_FULL` (default `100`). |
 | `RENDER_TIMEOUT_MS` | Default per-render timeout enforced by the queue (default `60000`). |
-| `SYNC_MAX_COST` | Frame-count threshold above which `normalize_request` marks a request `async` (default `90`) — the CLI doesn't act on this yet (it always calls `render()` unless `--callback-url` is given); it matters once the HTTP API (Крок 4) auto-picks sync vs. async. |
+| `SYNC_MAX_COST` | Frame-count threshold above which `normalize_request` marks a request `async` (default `90`). The HTTP server acts on this (auto-picks `202` vs. sync); the CLI doesn't — `eavexa render` always calls `render()` unless `--callback-url` is given, regardless of cost. |
 | `MAX_WIDTH` / `MAX_HEIGHT` | Max viewport dimensions (default `4096`). |
 | `MAX_VIDEO_DURATION` / `MAX_FPS` / `MAX_FRAMES` | Video limits enforced during request normalization. |
 | `OUTPUT_DIR` / `OUTPUT_DIR_ALIAS` | Where artifacts are written, and the path a remote consumer (e.g. n8n in a container) should see instead. |
