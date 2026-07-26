@@ -1,5 +1,7 @@
 # EAVexa
 
+[![CI](https://github.com/SamuiRo/EAVexa/actions/workflows/ci.yml/badge.svg)](https://github.com/SamuiRo/EAVexa/actions/workflows/ci.yml)
+
 EAVexa renders high-quality social images and deterministic videos from HTML templates.
 
 It uses Playwright + Chromium for pixel-accurate HTML rendering. Image jobs export PNG files. Video jobs capture PNG frames from the same HTML template and encode them with FFmpeg.

@@ -1,7 +1,7 @@
 {
   "name": "eavexa",
-  "version": "1.2.6",
-  "description": "PNG image generator from HTML templates",
+  "version": "2.0.0",
+  "description": "Render HTML templates to PNG images and MP4/WebM/MOV/MKV videos, via CLI, HTTP API, or a jobs.json batch runner",
   "type": "module",
   "main": "src/index.js",
   "bin": {
@@ -19,6 +19,7 @@
   ],
   "scripts": {
     "start": "node src/index.js",
+    "lint": "node scripts/check_syntax.mjs",
     "test": "node --test \"test/**/*.test.js\""
   },
   "repository": {

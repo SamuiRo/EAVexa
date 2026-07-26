@@ -18,11 +18,13 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 - [Architecture](architecture.md) - source layout, render flow, and module responsibilities.
 
-## EAVexa 2.0 — Pipeline Integration (in progress)
+## EAVexa 2.0 — Pipeline Integration
 
-Status: Крок 0-5 done (fixes, core, CLI, async jobs + webhooks, HTTP server, deployment
-docs). Крок 6 (S3/push drivers, `/metrics`, rate limiting, CI) not started — see
-[specification.md](specification.md) §16 for the full plan.
+**Released as 2.0.0** — see [CHANGELOG.md](../CHANGELOG.md). Крок 0-5 done (fixes, core,
+CLI, async jobs + webhooks, HTTP server, deployment docs), plus CI and versioning from
+Крок 6. S3/push storage drivers, `/metrics`, rate limiting, and `templates vendor` were
+deliberately skipped — not needed for a single-server deployment with n8n on the same
+machine; see [specification.md](specification.md) §16 for the full plan if that changes.
 
 - **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,
   webhooks і реєстр шаблонів. Пишемо код по ньому.
