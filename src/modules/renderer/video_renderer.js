@@ -105,8 +105,12 @@ export default class VideoRenderer {
       const page = await context.newPage();
       page.setDefaultTimeout(this.network_timeout_ms);
 
+      const on_progress = opts.on_progress ?? (() => {});
+
       await mkdir(path.dirname(output_path), { recursive: true });
+      on_progress({ phase: 'load', current: 0, total: total_frames, ratio: 0 });
       await this._load_page(page, html, opts);
+      on_progress({ phase: 'load', current: 0, total: total_frames, ratio: 0.05 });
 
       print(`Capturing ${total_frames} frame(s) at ${video_options.fps}fps`, 'system');
 
@@ -125,6 +129,13 @@ export default class VideoRenderer {
           omitBackground: false,
         });
 
+        on_progress({
+          phase:   'capture',
+          current: frame_index + 1,
+          total:   total_frames,
+          ratio:   0.05 + 0.8 * ((frame_index + 1) / total_frames),
+        });
+
         if (this._should_log_frame(frame_index, total_frames)) {
           print(`Frame ${frame_index + 1}/${total_frames}`, 'debug');
         }
@@ -138,6 +149,8 @@ export default class VideoRenderer {
         preset:   video_options.preset,
         webm_crf: video_options.webm_crf,
       });
+
+      on_progress({ phase: 'encode', current: total_frames, total: total_frames, ratio: 0.97 });
 
       return {
         output_path,

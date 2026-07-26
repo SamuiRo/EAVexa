@@ -2,6 +2,12 @@ import JobLoader            from './modules/jobs/job_loader.js';
 import RenderJobBuilder     from './modules/jobs/render_job_builder.js';
 import RenderOrchestrator   from './modules/orchestrator/render_orchestrator.js';
 import RenderResultReporter from './modules/orchestrator/render_result_reporter.js';
+import RenderService        from './core/render_service.js';
+import TemplateRegistry     from './core/template_registry.js';
+import BrowserPool          from './core/browser_pool.js';
+import RenderQueue          from './core/render_queue.js';
+import StorageAdapter       from './core/storage_adapter.js';
+import { BUILTIN_TEMPLATES_DIR, TEMPLATES_DIR } from './config/app_config.js';
 import { print, banner }    from './shared/utils.js';
 import { WELCOME_MESSAGE, SUB_TITLE } from './shared/messages.js';
 
@@ -10,9 +16,19 @@ import { WELCOME_MESSAGE, SUB_TITLE } from './shared/messages.js';
  */
 class Vexa {
   constructor() {
+    const registry = new TemplateRegistry({
+      builtin_dir: BUILTIN_TEMPLATES_DIR,
+      user_dir:    TEMPLATES_DIR,
+    });
+    const pool     = new BrowserPool();
+    const queue    = new RenderQueue();
+    const storage  = new StorageAdapter();
+
+    const render_service = new RenderService({ registry, pool, queue, storage });
+
     this.job_loader             = new JobLoader();
     this.render_job_builder     = new RenderJobBuilder();
-    this.render_orchestrator    = new RenderOrchestrator();
+    this.render_orchestrator    = new RenderOrchestrator({ render_service });
     this.render_result_reporter = new RenderResultReporter();
   }
 

@@ -1,0 +1,61 @@
+import { randomBytes } from 'crypto';
+
+// ─── Monotonic sortable IDs (ULID-like, no dependencies) ────────────────────
+// String sort order == time order. Lets `list()` paginate by cursor without
+// reading every record. See docs/specification.md §5.2.
+
+const ENCODING     = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford base32 (no I L O U)
+const TIME_LEN     = 10; // encodes 48-bit ms timestamp
+const RANDOM_LEN   = 12; // 60 bits of randomness
+
+let last_time   = 0;
+let last_random = null; // Uint8Array, incremented when called twice in the same ms
+
+function encode(value, length) {
+  let str = '';
+  let remaining = value;
+
+  for (let i = 0; i < length; i += 1) {
+    str = ENCODING[Number(remaining % 32n)] + str;
+    remaining /= 32n;
+  }
+
+  return str;
+}
+
+function random_bits() {
+  const bytes = randomBytes(RANDOM_LEN);
+  let value = 0n;
+
+  for (const byte of bytes) {
+    value = (value << 8n) | BigInt(byte);
+  }
+
+  // keep within RANDOM_LEN base32 digits (5 bits each)
+  return value & ((1n << BigInt(RANDOM_LEN * 5)) - 1n);
+}
+
+function increment(value) {
+  return (value + 1n) & ((1n << BigInt(RANDOM_LEN * 5)) - 1n);
+}
+
+/**
+ * Generate a monotonic, lexicographically sortable ID with the given prefix.
+ * Two IDs generated in the same millisecond still sort in call order.
+ */
+export function generate_id(prefix) {
+  const now = Date.now();
+
+  if (now === last_time && last_random !== null) {
+    last_random = increment(last_random);
+  } else {
+    last_time   = now;
+    last_random = random_bits();
+  }
+
+  return `${prefix}${encode(BigInt(now), TIME_LEN)}${encode(last_random, RANDOM_LEN)}`;
+}
+
+export const new_render_id   = () => generate_id('r_');
+export const new_job_id      = () => generate_id('j_');
+export const new_delivery_id = () => generate_id('d_');

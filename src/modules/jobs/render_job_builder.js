@@ -1,36 +1,36 @@
-import path          from 'path';
-import { INPUTS_DIR, OUTPUT_DIR } from '../../config/app_config.js';
+import path from 'path';
+import { INPUTS_DIR } from '../../config/app_config.js';
 
 /**
- * Converts user jobs into concrete renderer jobs with absolute paths.
+ * Converts user jobs.json entries into raw render requests, ready for
+ * normalize_request() / RenderService.render(). Output path planning
+ * (dated dirs, atomic writes) is owned by core/storage_adapter.js — this
+ * builder only points at the job's own output folder (`OUTPUT_DIR/<job_id>/`),
+ * matching the layout documented in README.md/docs/architecture.md.
  */
 export default class RenderJobBuilder {
   constructor(options = {}) {
     this.inputs_dir = options.inputs_dir ?? INPUTS_DIR;
-    this.output_dir = options.output_dir ?? OUTPUT_DIR;
   }
 
   /**
-   * Build renderer-ready job objects.
-   *
    * @param {Array<Object>} jobs
-   * @returns {Array<Object>}
+   * @returns {Array<Object>} Raw render requests, one per job.
    */
   build_render_jobs(jobs) {
     return jobs.map(job => this.build_render_job(job));
   }
 
   build_render_job(job) {
-    const job_input_dir  = path.join(this.inputs_dir, job.id);
-    const job_output_dir = path.join(this.output_dir, job.id);
+    const job_input_dir = path.join(this.inputs_dir, job.id);
 
     return {
-      template: path.join(job_input_dir, job.template),
-      output:   path.join(job_output_dir, job.output),
-      format:   job.format,
-      vars:     job.vars ?? {},
-      video:    job.video ?? null,
-      opts:     job.opts ?? {},
+      source: { path: path.join(job_input_dir, job.template) },
+      format: job.format,
+      vars:   job.vars ?? {},
+      video:  job.video ?? null,
+      output: { filename: job.output, dir: job.id },
+      metadata: { job_id: job.id },
     };
   }
 }

@@ -61,23 +61,42 @@ export const FORMATS = {
     // Custom — pass { width, height, device_scale_factor } directly
   };
   
+  // Matches "1080x1920" or "1080x1920@2" (dpr defaults to 2 when omitted).
+  const DIMENSION_PATTERN = /^(\d+)x(\d+)(?:@(\d+(?:\.\d+)?))?$/i;
+
+  function resolve_format_config(format) {
+    if (format && typeof format === 'object') return format;
+    if (typeof format !== 'string') return null;
+
+    if (FORMATS[format]) return FORMATS[format];
+
+    const match = DIMENSION_PATTERN.exec(format.trim());
+    if (!match) return null;
+
+    const [, width, height, dpr] = match;
+    return {
+      width:  Number(width),
+      height: Number(height),
+      device_scale_factor: dpr ? Number(dpr) : 2,
+    };
+  }
+
   /**
-   * Build a viewport + screenshot config from a format key or raw dimensions.
+   * Build a viewport + screenshot config from a format key, a "WxH@dpr"
+   * string (e.g. "1080x1920@2"), or raw dimensions.
    *
-   * @param {string|Object} format  Key from FORMATS or { width, height, device_scale_factor }
+   * @param {string|Object} format  FORMATS key, "WxH@dpr" string, or { width, height, device_scale_factor }
    * @returns {{ viewport: Object, device_scale_factor: number, clip: Object }}
    */
   export function build_render_options(format) {
-    const cfg = typeof format === 'string'
-      ? FORMATS[format]
-      : format;
-  
+    const cfg = resolve_format_config(format);
+
     if (!cfg) {
       throw new Error(`Unknown format: "${format}". Available: ${Object.keys(FORMATS).join(', ')}`);
     }
-  
+
     const { width, height, device_scale_factor = 2 } = cfg;
-  
+
     return {
       viewport:            { width, height },
       device_scale_factor,
