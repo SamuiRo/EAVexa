@@ -3,6 +3,31 @@
 All notable changes to this project are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- Deterministic `<video>` tag rendering. `<video>` elements embedded in a template
+  are now paused, muted, and taken off `autoplay`/`loop` on load, then seeked to
+  `time_s % video.duration` before every captured frame (looping short clips instead
+  of freezing on their last frame) and awaited on the `seeked` event so the screenshot
+  never races a still-decoding frame. Image jobs freeze `<video>` on its first frame,
+  matching how CSS animations are already frozen at `t=0` for PNG output. Opt a video
+  out of automatic control with `data-eavexa-skip`. New `VIDEO_TAG_TIMEOUT_MS` (default
+  `5000`ms) bounds the metadata-load wait and, capped at 2000ms, the per-frame seek
+  wait. See [docs/video_rendering.md](docs/video_rendering.md#video-elements-video-tag).
+
+### Fixed
+- **Local `<img>`, `<video>`, and other relative-path assets never actually loaded.**
+  `page.setContent()` leaves the document at `about:blank`; a `<base href="file://...">`
+  tag does not change that, and Chromium refuses "local resource" loads for any
+  subresource a non-`file://` document requests — every relative asset silently failed
+  (`naturalWidth: 0` for images, `MEDIA_ELEMENT_ERROR` for video) regardless of the
+  documented `images/`/`fonts/`/`videos/` folder convention. Fixed by navigating the
+  page to its own template directory (`file://...`) before `setContent()`, which keeps
+  that as the document URL so relative local assets resolve normally. Registry, `--file`,
+  and `jobs.json` sources are all affected and now fixed; remote (`http(s)`) sources were
+  never affected.
+
 ## [2.0.1] - 2026-07-26
 
 Fixes for issues found in `docs/audit_2.0.0.md`.

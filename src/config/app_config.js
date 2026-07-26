@@ -36,6 +36,10 @@ export const FFMPEG_PATH    = process.env.FFMPEG_PATH ?? null;
 export const NETWORK_TIMEOUT_MS = Number(process.env.NETWORK_TIMEOUT_MS ?? 15000);
 export const FONT_TIMEOUT_MS    = Number(process.env.FONT_TIMEOUT_MS ?? 5000);
 
+// Max time (ms) to wait for <video> elements to reach readyState HAVE_METADATA
+// (so their duration is known) before rendering proceeds with videos as-is.
+export const VIDEO_TAG_TIMEOUT_MS = Number(process.env.VIDEO_TAG_TIMEOUT_MS ?? 5000);
+
 export const BROWSER_MAX_RENDERS = Number(process.env.BROWSER_MAX_RENDERS ?? 200);
 
 // ─── Render limits ───────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 {
   "name": "eavexa",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Render HTML templates to PNG images and MP4/WebM/MOV/MKV videos, via CLI, HTTP API, or a jobs.json batch runner",
   "type": "module",
   "main": "src/index.js",

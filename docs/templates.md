@@ -237,7 +237,8 @@ Image jobs call `page.screenshot()` after:
 1. The HTML content is loaded.
 2. Network activity is idle.
 3. `document.fonts.ready` resolves.
-4. A small settle delay completes.
+4. Any `<video>` elements are paused, muted, and frozen on their first frame.
+5. A small settle delay completes.
 
 CSS animations are disabled for PNG screenshots so the image is captured in a stable state.
 
@@ -253,4 +254,6 @@ Video jobs keep animations controllable per frame. For precise videos, expose:
 </script>
 ```
 
-Read [HTML to video rendering](video_rendering.md) for the full frame API.
+`<video>` elements are also handled automatically — paused, muted, and seeked to loop
+in sync with each captured frame. See [HTML to video rendering](video_rendering.md) for
+the full frame API and the `<video>` tag section.

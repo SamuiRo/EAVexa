@@ -1,9 +1,9 @@
 import { mkdir, rm } from 'fs/promises';
 import path                from 'path';
 import { chromium }        from 'playwright';
-import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
+import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS, VIDEO_TAG_TIMEOUT_MS } from '../../config/app_config.js';
 import { build_render_options } from '../../config/render_config.js';
-import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
+import { build_launch_args, resolve_executable_path, prime_local_file_origin } from '../../shared/chromium.js';
 import { inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
 import { sleep }           from '../../shared/utils.js';
 import { log }             from '../../shared/logger.js';
@@ -25,6 +25,10 @@ export default class VideoRenderer {
     this.chrome_path  = options.chrome_path ?? CHROME_PATH;
     this.network_timeout_ms = options.network_timeout_ms ?? NETWORK_TIMEOUT_MS;
     this.font_timeout_ms    = options.font_timeout_ms ?? FONT_TIMEOUT_MS;
+    this.video_timeout_ms   = options.video_timeout_ms ?? VIDEO_TAG_TIMEOUT_MS;
+    // Bounds the wait for a single per-frame video seek, not just the initial
+    // metadata load — capped low so a stuck video can't stall hundreds of frames.
+    this.video_seek_timeout_ms = Math.min(this.video_timeout_ms, 2000);
     this.settle_ms    = options.settle_ms ?? 100;
     this.encoder      = options.encoder ?? new FfmpegEncoder(options.ffmpeg ?? {});
   }
@@ -157,12 +161,15 @@ export default class VideoRenderer {
       ? inject_font_preloads(with_base, opts.font_urls)
       : with_base;
 
+    await prime_local_file_origin(page, opts.base_url);
+
     await page.setContent(preloaded_html, {
       waitUntil: 'networkidle',
       timeout:   this.network_timeout_ms,
     });
 
     await this._wait_for_fonts(page);
+    await this._prepare_videos(page);
 
     if (this.settle_ms > 0) {
       await page.waitForTimeout(this.settle_ms);
@@ -186,6 +193,43 @@ export default class VideoRenderer {
     }
   }
 
+  /**
+   * Pause and mute every <video> element (playback is driven per-frame by
+   * _seek_frame, not real time) and wait for readyState HAVE_METADATA so
+   * `duration` is known before the frame loop starts. Elements marked
+   * `data-eavexa-skip` are left alone for templates with custom video control.
+   */
+  async _prepare_videos(page) {
+    let timed_out = false;
+
+    await page.evaluate(() => {
+      for (const video of document.querySelectorAll('video')) {
+        if (video.hasAttribute('data-eavexa-skip')) continue;
+
+        video.pause();
+        video.muted = true;
+        video.autoplay = false;
+        video.loop = false;
+      }
+    });
+
+    await Promise.race([
+      page.evaluate(() => Promise.all(
+        Array.from(document.querySelectorAll('video'))
+          .filter(video => !video.hasAttribute('data-eavexa-skip'))
+          .map(video => (video.readyState >= 1 ? null : new Promise(resolve => {
+            video.addEventListener('loadedmetadata', resolve, { once: true });
+            video.addEventListener('error', resolve, { once: true });
+          }))),
+      )),
+      sleep(this.video_timeout_ms).then(() => { timed_out = true; }),
+    ]);
+
+    if (timed_out) {
+      log({ level: 'warn', msg: `Video metadata loading exceeded ${this.video_timeout_ms}ms — rendering with videos as-is` });
+    }
+  }
+
   async _prepare_frames_dir(output_path, video_options) {
     const output_dir  = path.dirname(output_path);
     const output_name = path.basename(output_path, path.extname(output_path));
@@ -201,7 +245,7 @@ export default class VideoRenderer {
   }
 
   async _seek_frame(page, frame_state) {
-    const result = await page.evaluate(async state => {
+    const result = await page.evaluate(async ({ state, video_seek_timeout_ms }) => {
       const root = document.documentElement;
 
       root.style.setProperty('--eavexa-time', `${state.time_s}s`);
@@ -220,15 +264,53 @@ export default class VideoRenderer {
         }
       }
 
+      // Videos loop over their own duration so a short background clip keeps
+      // playing for the full render instead of freezing on its last frame.
+      const videos = Array.from(document.querySelectorAll('video'))
+        .filter(video => !video.hasAttribute('data-eavexa-skip'));
+      let failed_video_seek_count = 0;
+
+      await Promise.all(videos.map(video => new Promise(resolve => {
+        const duration = video.duration;
+
+        if (!Number.isFinite(duration) || duration <= 0) {
+          resolve();
+          return;
+        }
+
+        const target = state.time_s % duration;
+
+        if (Math.abs(video.currentTime - target) < 0.001) {
+          resolve();
+          return;
+        }
+
+        const timeout = setTimeout(() => {
+          failed_video_seek_count += 1;
+          resolve();
+        }, video_seek_timeout_ms);
+
+        video.addEventListener('seeked', () => {
+          clearTimeout(timeout);
+          resolve();
+        }, { once: true });
+
+        video.currentTime = target;
+      })));
+
       if (typeof window.eavexa_render_frame === 'function') {
         await window.eavexa_render_frame(state);
       }
 
-      return { failed_animation_count };
-    }, frame_state);
+      return { failed_animation_count, failed_video_seek_count };
+    }, { state: frame_state, video_seek_timeout_ms: this.video_seek_timeout_ms });
 
     if (result.failed_animation_count > 0 && frame_state.frame === 0) {
       log({ level: 'warn', msg: `Skipped ${result.failed_animation_count} unsupported animation timeline(s)` });
+    }
+
+    if (result.failed_video_seek_count > 0) {
+      log({ level: 'warn', msg: `Frame ${frame_state.frame_number}: ${result.failed_video_seek_count} video seek(s) exceeded ${this.video_seek_timeout_ms}ms` });
     }
   }
 

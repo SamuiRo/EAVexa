@@ -1,7 +1,7 @@
 import { chromium }          from 'playwright';
 import { build_render_options } from '../../config/render_config.js';
-import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
-import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
+import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS, VIDEO_TAG_TIMEOUT_MS } from '../../config/app_config.js';
+import { build_launch_args, resolve_executable_path, prime_local_file_origin } from '../../shared/chromium.js';
 import { inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
 import { sleep }              from '../../shared/utils.js';
 import { log }                from '../../shared/logger.js';
@@ -27,6 +27,7 @@ export default class ImageRenderer {
     // Timeouts
     this.network_timeout_ms = options.network_timeout_ms ?? NETWORK_TIMEOUT_MS;
     this.font_timeout_ms    = options.font_timeout_ms ?? FONT_TIMEOUT_MS;
+    this.video_timeout_ms   = options.video_timeout_ms ?? VIDEO_TAG_TIMEOUT_MS;
 
     // Extra wait after page load (for animations / late repaints)
     this.settle_ms      = options.settle_ms ?? 200;
@@ -90,12 +91,15 @@ export default class ImageRenderer {
         ? inject_font_preloads(prepared_html, opts.font_urls)
         : prepared_html;
 
+      await prime_local_file_origin(page, opts.base_url);
+
       await page.setContent(prepared_html, {
         waitUntil: 'networkidle',
         timeout:   this.network_timeout_ms,
       });
 
       await this._wait_for_fonts(page);
+      await this._prepare_videos(page);
 
       // Extra settle time for CSS transitions / late paints
       if (this.settle_ms > 0) {
@@ -132,6 +136,51 @@ export default class ImageRenderer {
 
     if (timed_out) {
       log({ level: 'warn', msg: `Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is` });
+    }
+  }
+
+  /**
+   * Pause, mute, and freeze every <video> element on its first frame —
+   * mirrors `animations: 'disabled'` freezing CSS animations at t=0, so an
+   * image job captures a stable frame instead of whatever the video happened
+   * to autoplay to. Elements marked `data-eavexa-skip` are left alone.
+   */
+  async _prepare_videos(page) {
+    let timed_out = false;
+
+    await Promise.race([
+      page.evaluate(() => Promise.all(
+        Array.from(document.querySelectorAll('video'))
+          .filter(video => !video.hasAttribute('data-eavexa-skip'))
+          .map(video => new Promise(resolve => {
+            video.pause();
+            video.muted = true;
+            video.autoplay = false;
+            video.loop = false;
+
+            const freeze_at_start = () => {
+              if (video.currentTime === 0) {
+                resolve();
+                return;
+              }
+
+              video.addEventListener('seeked', resolve, { once: true });
+              video.currentTime = 0;
+            };
+
+            if (video.readyState >= 1) {
+              freeze_at_start();
+            } else {
+              video.addEventListener('loadedmetadata', freeze_at_start, { once: true });
+              video.addEventListener('error', resolve, { once: true });
+            }
+          })),
+      )),
+      sleep(this.video_timeout_ms).then(() => { timed_out = true; }),
+    ]);
+
+    if (timed_out) {
+      log({ level: 'warn', msg: `Video loading exceeded ${this.video_timeout_ms}ms — rendering with videos as-is` });
     }
   }
 }

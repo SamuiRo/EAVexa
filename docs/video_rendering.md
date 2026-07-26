@@ -238,6 +238,49 @@ For `<canvas>`, redraw the whole frame inside the hook:
 </script>
 ```
 
+## Video Elements (`<video>` tag)
+
+`<video>` elements embedded in a template (e.g. background footage) are handled
+automatically — no `eavexa_render_frame` code required:
+
+- Every `<video>` is paused, muted, and taken off `autoplay`/`loop` as soon as the page
+  loads, so real-time playback never drifts out of sync with frame capture.
+- EAVexa waits for each video's metadata (`duration`) to load before the frame loop
+  starts, bounded by `VIDEO_TAG_TIMEOUT_MS` (default `5000`ms) — a stuck video logs a
+  warning and rendering proceeds with videos as-is rather than hanging.
+- Before every frame, each video is seeked to `time_s % video.duration`, so a clip
+  shorter than the render `duration` **loops** instead of freezing on its last frame.
+  A clip longer than `duration` never reaches its end. EAVexa waits for the browser's
+  `seeked` event (bounded per-frame, capped at 2000ms) before the screenshot is taken.
+- Seeking runs in parallel with Web Animations pausing and before
+  `window.eavexa_render_frame(...)` is called, so the hook can read `video.currentTime`
+  already updated for the frame if it needs to react to it.
+
+```html
+<video src="./videos/loop.mp4" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>
+```
+
+Put video files next to the template, the same way as `images/` and `fonts/`:
+
+```text
+data/inputs/<job_id>/
+  template.html
+  videos/
+    loop.mp4
+```
+
+**Opting a video out of automatic control** — add `data-eavexa-skip` when a template
+drives a `<video>` itself (e.g. it isn't meant to be visible, or timing is managed by
+custom script):
+
+```html
+<video src="./videos/loop.mp4" data-eavexa-skip></video>
+```
+
+**Image jobs** freeze every non-skipped `<video>` on its first frame (`currentTime: 0`)
+instead of looping — the same principle as CSS animations being frozen at `t=0` for
+PNG output. See [Image Rendering Notes](templates.md#image-rendering-notes).
+
 ## Rules for reliable templates
 
 - Keep the template size fixed with CSS, matching the selected `format`.
