@@ -35,6 +35,18 @@ npm start
 
 The app reads `data/jobs.json`, renders all enabled jobs, and writes results to `data/outputs/<job_id>/`.
 
+## CLI
+
+For one-off renders or pipeline use (n8n, scripts, CI) without a `jobs.json` entry:
+
+```bash
+node src/cli/cli.js render -t story_pricing_pro --var TITLE="Launch week" -o ./out.png
+node src/cli/cli.js render --file ./my.html --format story -o - > out.png
+node src/cli/cli.js doctor
+```
+
+See [docs/cli.md](docs/cli.md) for every command and flag.
+
 ## Minimal Image Job
 
 ```json

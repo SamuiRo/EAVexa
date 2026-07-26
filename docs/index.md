@@ -5,6 +5,7 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 ## User Guides
 
 - [Getting started](getting_started.md) - install, configure, and run the renderer.
+- [CLI](cli.md) - `eavexa render`/`batch`/`templates`/`formats`/`doctor`, one-off and pipeline use.
 - [Jobs configuration](jobs.md) - every supported `data/jobs.json` field.
 - [HTML templates](templates.md) - how to structure HTML, assets, fonts, and placeholders.
 - [HTML to video rendering](video_rendering.md) - deterministic animation rendering and FFmpeg output.
@@ -14,7 +15,10 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 - [Architecture](architecture.md) - source layout, render flow, and module responsibilities.
 
-## EAVexa 2.0 — Pipeline Integration (planning)
+## EAVexa 2.0 — Pipeline Integration (in progress)
+
+Status: Крок 0-2 done (fixes, core, CLI). Крок 3+ (job queue, webhooks, HTTP server) not
+started — see [specification.md](specification.md) §16 for the full plan.
 
 - **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,
   webhooks і реєстр шаблонів. Пишемо код по ньому.

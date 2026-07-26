@@ -2,13 +2,18 @@
 
 EAVexa is a Node.js ESM application. It renders HTML templates through Playwright and optionally encodes video through FFmpeg.
 
-As of Крок 1 (see `docs/specification.md`), all rendering — including the legacy
-`data/jobs.json` batch runner — goes through one core: `core/render_service.js`. CLI and
-HTTP front-ends (Крок 2/4) will call the same `RenderService.render()` used here.
+As of Крок 2 (see `docs/specification.md`), all rendering — the `eavexa` CLI, and the
+legacy `data/jobs.json` batch runner alike — goes through one core:
+`core/render_service.js`. The HTTP front-end (Крок 4) will call the same
+`RenderService.render()` used here.
 
-## Entry Point
+## Entry Points
 
-`src/index.js` is intentionally thin. It wires the legacy jobs.json adapter onto the core:
+`src/cli/cli.js` is the `eavexa` binary (`package.json` → `bin.eavexa`). It routes to one
+of `src/cli/commands/{render,batch,templates,formats,doctor}.js`. See `docs/cli.md`.
+
+`src/index.js` (`npm start`) is now a one-line alias for `eavexa batch` — the legacy
+`data/jobs.json` workflow lives entirely in `cli/commands/batch.js`:
 
 1. Print the banner.
 2. Load and validate jobs (`JobLoader`).
@@ -22,6 +27,12 @@ HTTP front-ends (Крок 2/4) will call the same `RenderService.render()` used 
 
 ```text
 src/
+  cli/
+    cli.js                   # bin entry, routes argv[2] to a command
+    args.js                  # dependency-free flag parser
+    output.js                # stdout/stderr discipline (human / --json / -o -)
+    commands/
+      render.js  batch.js  templates.js  formats.js  doctor.js
   core/
     render_service.js       # the one render entry point behind every front-end
     render_request.js       # normalize_request(): unifies CLI/HTTP/jobs.json into one shape
@@ -30,6 +41,7 @@ src/
     storage_adapter.js      # atomic local writes, checksum, OUTPUT_DIR_ALIAS translation
     template_registry.js    # resolves template names -> manifest + HTML (user_dir overrides builtin_dir)
     template_manifest.js    # parse/infer manifests, validate_vars()
+    create_render_service.js # wires registry+pool+queue+storage — the one place that does
     errors.js                # RenderError + error code table (http_status / exit_code)
     ids.js                   # monotonic sortable IDs (r_/j_/d_ prefixes)
   config/
@@ -59,8 +71,17 @@ src/
 
 | Module | Responsibility |
 | --- | --- |
-| `src/index.js` | High-level application orchestration only. |
+| `src/index.js` | One-line alias for `eavexa batch` (`npm start`). |
+| `cli/cli.js` | `eavexa` bin entry — routes to a command module, top-level `--help`, exit-code mapping. |
+| `cli/args.js` | Dependency-free flag parser: `--k v`, `--k=v`, booleans, repeatable flags, short aliases. |
+| `cli/output.js` | stdout/stderr discipline: human / `--json` / raw-stdout (`-o -`) modes. |
+| `cli/commands/render.js` | `eavexa render` — one-off render from a template/file/url/stdin/full request document. |
+| `cli/commands/batch.js` | `eavexa batch` — the `data/jobs.json` workflow (also used by `npm start`). |
+| `cli/commands/templates.js` | `eavexa templates list\|show`. |
+| `cli/commands/formats.js` | `eavexa formats`. |
+| `cli/commands/doctor.js` | `eavexa doctor` — environment/dependency checks, exits `4` on failure. |
 | `core/render_service.js` | The one render entry point: loads the template, applies vars, renders via the browser pool, stores the artifact, builds the result. |
+| `core/create_render_service.js` | The one place that wires `TemplateRegistry`+`BrowserPool`+`RenderQueue`+`StorageAdapter` into a `RenderService`. |
 | `core/render_request.js` | `normalize_request()` — turns a raw request (jobs.json entry, future CLI/HTTP body) into one shape: resolved source, parsed format, validated vars, normalized video, cost/mode, output/options defaults. |
 | `core/render_queue.js` | Two independent concurrency lanes (`image`, `video`) so a long video render never blocks queued images. Per-task timeout and `AbortSignal` support. |
 | `core/browser_pool.js` | Pools one `image_renderer`/`video_renderer` connection each, lazily connecting, restarting every `BROWSER_MAX_RENDERS` renders. |
@@ -86,6 +107,10 @@ src/
 | `shared/messages.js` | CLI banner text. |
 
 ## Render Flow
+
+Three front-ends build a raw request and hand it to the same `RenderService.render()`:
+`eavexa render` (flags -> request), `eavexa batch` / `data/jobs.json` (one request per
+job via `RenderJobBuilder`), and — once Крок 4 lands — the HTTP API.
 
 ```text
 data/jobs.json
@@ -193,6 +218,9 @@ Runs `node --test` over `test/**/*.test.js` and `test/core/**/*.test.js`:
   path-traversal rejection;
 - `core/render_service.js` — end-to-end renders (registry and file sources) through a
   real Chromium instance, plus error-code mapping (`MISSING_REQUIRED_VAR`, `UNKNOWN_FORMAT`);
+- `cli/args.js` — flag parsing (aliases, booleans, repeated flags, `--`);
+- `cli/commands/render.js` — spawns the real `eavexa` binary as a child process and
+  asserts the actual stdout/stderr split for `--json` and `-o -`, plus exit codes;
 - an integration smoke test that renders real PNGs and checks the **actual** pixel
   dimensions — the regression check for the DPR bug described in `docs/specification.md`
   §12 (B1).

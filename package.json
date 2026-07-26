@@ -1,9 +1,12 @@
 {
   "name": "eavexa",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "PNG image generator from HTML templates",
   "type": "module",
   "main": "src/index.js",
+  "bin": {
+    "eavexa": "src/cli/cli.js"
+  },
   "engines": {
     "node": ">=18"
   },
