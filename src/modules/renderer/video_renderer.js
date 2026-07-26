@@ -1,12 +1,12 @@
-import { mkdir, readFile, rm } from 'fs/promises';
-import { pathToFileURL }   from 'url';
+import { mkdir, rm } from 'fs/promises';
 import path                from 'path';
 import { chromium }        from 'playwright';
 import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
 import { build_render_options } from '../../config/render_config.js';
 import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
-import { apply_vars, inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
-import { print, sleep }    from '../../shared/utils.js';
+import { inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
+import { sleep }           from '../../shared/utils.js';
+import { log }             from '../../shared/logger.js';
 import FfmpegEncoder       from './ffmpeg_encoder.js';
 
 const DEFAULT_VIDEO_OPTIONS = {
@@ -51,33 +51,6 @@ export default class VideoRenderer {
   }
 
   /**
-   * Render an HTML file to a video file.
-   *
-   * @param {string}        template_path
-   * @param {string}        output_path
-   * @param {string|Object} format
-   * @param {Object}        [vars]
-   * @param {Object}        [video]
-   * @param {Object}        [opts]
-   * @returns {Promise<Object>}
-   */
-  async render_file(template_path, output_path, format, vars = {}, video = {}, opts = {}) {
-    print(`Rendering video: ${path.basename(template_path)}`, 'debug');
-
-    let html = await readFile(template_path, 'utf-8');
-    html = apply_vars(html, vars);
-
-    const base_url = opts.base_url
-      ?? pathToFileURL(path.dirname(template_path) + path.sep).href;
-
-    return this.render_html(html, output_path, format, {
-      ...opts,
-      base_url,
-      video,
-    });
-  }
-
-  /**
    * Render an HTML string to a video file.
    *
    * @param {string}        html
@@ -112,7 +85,7 @@ export default class VideoRenderer {
       await this._load_page(page, html, opts);
       on_progress({ phase: 'load', current: 0, total: total_frames, ratio: 0.05 });
 
-      print(`Capturing ${total_frames} frame(s) at ${video_options.fps}fps`, 'system');
+      log({ level: 'info', msg: `Capturing ${total_frames} frame(s) at ${video_options.fps}fps` });
 
       for (let frame_index = 0; frame_index < total_frames; frame_index += 1) {
         const frame_state = this._build_frame_state(frame_index, total_frames, video_options);
@@ -137,7 +110,7 @@ export default class VideoRenderer {
         });
 
         if (this._should_log_frame(frame_index, total_frames)) {
-          print(`Frame ${frame_index + 1}/${total_frames}`, 'debug');
+          log({ level: 'debug', msg: `Frame ${frame_index + 1}/${total_frames}` });
         }
       }
 
@@ -175,33 +148,6 @@ export default class VideoRenderer {
     }
   }
 
-  /**
-   * Render multiple videos in one browser session.
-   *
-   * @param {Array<Object>} jobs
-   * @returns {Promise<Array>}
-   */
-  async render_batch(jobs) {
-    const results = [];
-
-    print(`Starting video batch: ${jobs.length} job(s)`, 'system');
-
-    for (const job of jobs) {
-      const result = await this.render_file(
-        job.template,
-        job.output,
-        job.format,
-        job.vars  ?? {},
-        job.video ?? {},
-        job.opts  ?? {},
-      );
-      results.push({ ...result, template: job.template });
-    }
-
-    print('Video batch complete', 'system');
-    return results;
-  }
-
   async _load_page(page, html, opts) {
     const with_base = opts.base_url
       ? inject_base_url(html, opts.base_url)
@@ -236,7 +182,7 @@ export default class VideoRenderer {
     ]);
 
     if (timed_out) {
-      print(`Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is`, 'warning');
+      log({ level: 'warn', msg: `Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is` });
     }
   }
 
@@ -282,7 +228,7 @@ export default class VideoRenderer {
     }, frame_state);
 
     if (result.failed_animation_count > 0 && frame_state.frame === 0) {
-      print(`Skipped ${result.failed_animation_count} unsupported animation timeline(s)`, 'warning');
+      log({ level: 'warn', msg: `Skipped ${result.failed_animation_count} unsupported animation timeline(s)` });
     }
   }
 

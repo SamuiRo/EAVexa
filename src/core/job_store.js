@@ -3,7 +3,7 @@ import path from 'path';
 import { RenderError } from './errors.js';
 import { decode_id_time } from './ids.js';
 import { file_exists } from '../shared/utils.js';
-import { JOB_STORE_DIR, JOB_CACHE_SIZE } from '../config/app_config.js';
+import { JOB_STORE_DIR, JOB_CACHE_SIZE, JOB_RECOVERY_WINDOW_DAYS } from '../config/app_config.js';
 
 class LRUCache {
   constructor(max_size) {
@@ -113,17 +113,21 @@ export default class FileJobStore {
 
   /**
    * Jobs with a webhook still waiting on a scheduled retry — resumed at startup.
+   * Bounded to the last `since_days` (default JOB_RECOVERY_WINDOW_DAYS): job
+   * records are never deleted, so an unbounded scan grows with total history —
+   * see docs/audit_2.0.0.md A6.
    */
-  async pending_callbacks() {
-    const all = await this._all_jobs();
+  async pending_callbacks({ since_days = JOB_RECOVERY_WINDOW_DAYS } = {}) {
+    const all = await this._all_jobs({ since_days });
     return all.filter(job => job.callback?.state === 'pending');
   }
 
   /**
    * Jobs left in 'queued'/'running' by a process that died mid-render.
+   * Bounded the same way as `pending_callbacks()` — see docs/audit_2.0.0.md A6.
    */
-  async orphaned_running() {
-    const all = await this._all_jobs();
+  async orphaned_running({ since_days = JOB_RECOVERY_WINDOW_DAYS } = {}) {
+    const all = await this._all_jobs({ since_days });
     return all.filter(job => job.status === 'queued' || job.status === 'running');
   }
 
@@ -175,10 +179,20 @@ export default class FileJobStore {
     }
   }
 
-  async _all_jobs() {
+  /**
+   * @param {{ since_days?: number|null }} [opts]  Stop once a date directory
+   *   falls outside the window — null/undefined scans everything.
+   */
+  async _all_jobs({ since_days = null } = {}) {
+    const cutoff = since_days != null
+      ? new Date(Date.now() - since_days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      : null;
+
     const all = [];
 
     for (const date_dir of await this._date_dirs_desc()) {
+      if (cutoff && date_dir !== 'unknown' && date_dir < cutoff) break;
+
       for (const file of await this._job_files_desc(date_dir)) {
         const job = await this.get(path.basename(file, '.json'));
         if (job) all.push(job);

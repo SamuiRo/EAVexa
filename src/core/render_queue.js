@@ -70,6 +70,8 @@ export default class RenderQueue {
   async _run(lane, entry) {
     this.running[lane] += 1;
 
+    const task_promise = entry.task();
+
     let timer;
     const timeout_promise = entry.timeout_ms
       ? new Promise((_, reject) => {
@@ -88,7 +90,7 @@ export default class RenderQueue {
         })
       : null;
 
-    const racers = [entry.task()];
+    const racers = [task_promise];
     if (timeout_promise) racers.push(timeout_promise);
     if (abort_promise) racers.push(abort_promise);
 
@@ -100,9 +102,17 @@ export default class RenderQueue {
     } finally {
       if (timer) clearTimeout(timer);
       if (abort_handler) entry.signal.removeEventListener('abort', abort_handler);
+    }
 
+    // Losing the race above (timeout/abort) rejects the caller's promise, but
+    // the renderer behind `task_promise` has no way to know that — it keeps
+    // running to completion. Hold this lane's slot until it actually settles,
+    // so a burst of timeouts/cancellations can't push concurrency past the
+    // configured limit. Full cancellation (aborting the render itself) would
+    // need every renderer to react to a signal — see docs/audit_2.0.0.md A7.
+    task_promise.catch(() => {}).finally(() => {
       this.running[lane] -= 1;
       this._drain(lane);
-    }
+    });
   }
 }

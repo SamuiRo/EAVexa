@@ -413,6 +413,11 @@ export default class RenderService {
 2. `pending_callbacks()` → відновити бекоф доставок;
 3. прибрати осиротілі директорії кадрів у `TMP_DIR`.
 
+Обидва скани обмежені вікном `JOB_RECOVERY_WINDOW_DAYS` (дефолт 7): записи джобів за
+замовчуванням не видаляються ніколи, тож необмежений скан ріс би разом з усією історією.
+Джоб, старший за вікно, не відновлюється — підіймати значення варто, якщо доставка може
+лишатись незавершеною довше.
+
 ---
 
 ## 6. Життєвий цикл рендеру
@@ -840,6 +845,7 @@ templates/story_pricing_pro/
 | `RETENTION_TTL_MS` | `null` | лише для `ttl` |
 | `RETENTION_MAX_BYTES` | `null` | м'яка межа сховища |
 | `JOB_CACHE_SIZE` | `500` | LRU активних джобів |
+| `JOB_RECOVERY_WINDOW_DAYS` | `7` | глибина скану при відновленні на старті (§5.11) |
 | `S3_*` | — | endpoint, bucket, key, secret, region, `force_path_style` (MinIO) |
 | **Webhooks** | | |
 | `WEBHOOK_SECRET` | `null` | HMAC |

@@ -1,9 +1,5 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'path';
-import { writeFile, rm, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-import { tmpdir } from 'os';
 import ImageRenderer from '../src/modules/renderer/image_renderer.js';
 import { read_png_size } from './support/png_size.js';
 
@@ -39,30 +35,4 @@ test('render_html honors base_url so relative assets resolve via <base href> (B2
   const { width, height } = read_png_size(png);
   assert.equal(width, 10);
   assert.equal(height, 10);
-});
-
-test('render_file creates the output directory lazily and writes the PNG (B9)', async () => {
-  const work_dir     = path.join(tmpdir(), `eavexa-image-renderer-test-${Date.now()}`);
-  const template_path = path.join(work_dir, 'template.html');
-  const output_path   = path.join(work_dir, 'out', 'result.png');
-
-  await mkdir(work_dir, { recursive: true });
-  await writeFile(template_path, '<html><body><div>{{TITLE}}</div></body></html>', 'utf-8');
-
-  try {
-    assert.equal(existsSync(path.dirname(output_path)), false);
-
-    const result = await renderer.render_file(
-      template_path,
-      output_path,
-      { width: 20, height: 20, device_scale_factor: 1 },
-      { TITLE: '<b>hi</b>' },
-    );
-
-    assert.equal(existsSync(output_path), true);
-    assert.equal(result.width, 20);
-    assert.equal(result.height, 20);
-  } finally {
-    await rm(work_dir, { recursive: true, force: true });
-  }
 });

@@ -53,7 +53,7 @@ after(async () => {
   await rm(template_dir, { recursive: true, force: true });
 });
 
-function create_service() {
+function create_service(overrides = {}) {
   const job_store = new FileJobStore({ dir: job_dir });
   const notifier  = new WebhookNotifier({ job_store });
 
@@ -64,6 +64,7 @@ function create_service() {
     storage: new StorageAdapter({ output_dir }),
     job_store,
     notifier,
+    ...overrides,
   });
 }
 
@@ -88,6 +89,53 @@ test('submit() runs the job in the background and delivers a webhook on completi
 
     assert.equal(receiver.requests.at(-1).event, 'render.completed');
     assert.equal(receiver.requests.at(-1).job_id, job.id);
+  } finally {
+    await service.close();
+  }
+});
+
+test('async + output.type=base64 over CALLBACK_INLINE_MAX_BYTES downgrades to a link (A4 regression)', async () => {
+  // A real artifact over the limit would need a huge template — inject a tiny
+  // limit instead so a normal render trips it. See docs/audit_2.0.0.md A4.
+  const service = create_service({ callback_inline_max_bytes: 1 });
+
+  try {
+    const { job, done } = await service.submit({
+      source: { path: path.join(template_dir, 'template.html') },
+      format: { width: 20, height: 10, device_scale_factor: 1 },
+      output: { filename: 'downgrade.png', dir: 'downgrade_job', type: 'base64' },
+      callback_url: receiver.url,
+      origin: { via: 'http', public_base_url: 'http://127.0.0.1:9' },
+    });
+
+    await done;
+
+    const final = await service.job_store.get(job.id);
+    assert.equal(final.status, 'done');
+    assert.equal(final.result.data, null, 'base64 data must not be inlined once over the limit');
+    assert.equal(final.result.downgraded_from, 'base64');
+    assert.ok(final.result.url, 'a link must be provided in place of inline data');
+
+    const payload = receiver.requests.at(-1);
+    assert.equal(payload.result.data, null);
+    assert.equal(payload.result.downgraded_from, 'base64');
+  } finally {
+    await service.close();
+  }
+});
+
+test('sync + output.type=base64 is never downgraded, regardless of size (A4 regression)', async () => {
+  const service = create_service({ callback_inline_max_bytes: 1 });
+
+  try {
+    const result = await service.render({
+      source: { path: path.join(template_dir, 'template.html') },
+      format: { width: 20, height: 10, device_scale_factor: 1 },
+      output: { filename: 'sync-b64.png', dir: 'sync_b64_job', type: 'base64' },
+    });
+
+    assert.ok(result.data, 'sync callers asked for base64 explicitly and read the response directly');
+    assert.equal(result.downgraded_from, null);
   } finally {
     await service.close();
   }

@@ -3,6 +3,47 @@
 All notable changes to this project are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [2.0.1] - 2026-07-26
+
+Fixes for issues found in `docs/audit_2.0.0.md`.
+
+### Fixed
+- **Async `result.url` was broken (404) prior to 2.0.1.** It was built from `render_id`
+  while the job record was stored under a different `job_id`, so following the link
+  from a webhook payload always 404'd — the exact scenario the async contract exists
+  for. Sync requests were unaffected (their `render_id` and job record id coincide).
+  Artifacts on disk are also now stored under the id a job record actually resolves
+  by, fixing `outputs/<date>/<id>/...` not matching any job (A1, A8).
+- Video rendering wrote log lines to stdout, corrupting `--json` output and raw
+  `-o -` byte streams for every video render (A2).
+- `templates/` shipped empty — every named-template example in the README and docs,
+  including the first n8n workflow a user is meant to import, failed with
+  `TEMPLATE_NOT_FOUND`. Added a working `story_pricing_pro` template (A3). Also added
+  `promo` — the animated video template referenced by `docs/n8n/async_video.json` and
+  the video examples throughout the CLI/API docs, which had no template behind it
+  either; it choreographs its reveal entirely from `--eavexa-progress`/
+  `--eavexa-time-ms` (no `@keyframes`), so it adapts to whatever `video.duration` a
+  request asks for.
+- Async + `output.type: "base64"` had no size limit, so a large artifact produced an
+  oversized webhook body that a receiver like n8n would reject. Added
+  `CALLBACK_INLINE_MAX_BYTES` (default 256 KiB) with automatic downgrade to a link
+  (`data: null`, `downgraded_from: "base64"`) — sync requests are unaffected (A4).
+- `eavexa doctor` reported `OK` for template directories without checking they
+  existed, and gave no visibility into how many templates were actually found (A5).
+- A render that hit its timeout or was cancelled kept running in the background
+  instead of stopping, letting concurrency exceed `RENDER_CONCURRENCY`/
+  `VIDEO_CONCURRENCY` under a burst of timeouts (A7, partial: the lane slot is now
+  held until the render actually finishes; full mid-render cancellation is still open).
+- Startup job recovery (`orphaned_running()`/`pending_callbacks()`) scanned every job
+  ever written, growing without bound since job records are never deleted. Bounded to
+  the last `JOB_RECOVERY_WINDOW_DAYS` (default 7) (A6).
+- HTTP renders normalized the request twice per call (once to decide sync/async, once
+  again inside `submit()`/`render()`), doubling template resolution work (A9).
+
+### Removed
+- Dead code: `render_file()`/`render_batch()` in both renderers, unreachable since
+  `RenderService` became the only render path (A10).
+
 ## [2.0.0] - 2026-07-26
 
 Pipeline-integration rewrite (`docs/specification.md`) — EAVexa grows from a single

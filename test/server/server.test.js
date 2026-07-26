@@ -264,7 +264,19 @@ test('async render (mode=async) returns 202, and completes with a delivered webh
     const job_res = await get_json(body.poll_url);
     assert.equal(job_res.body.job.status, 'done');
     assert.equal(job_res.body.job.callback.state, 'delivered');
-    assert.equal(receiver.requests.at(-1).event, 'render.completed');
+
+    const webhook_payload = receiver.requests.at(-1);
+    assert.equal(webhook_payload.event, 'render.completed');
+    assert.equal(webhook_payload.job_id, body.job_id);
+
+    // A1 regression: the async webhook's result.url must point at *this* job,
+    // not at some other render_id — see docs/audit_2.0.0.md A1.
+    assert.match(webhook_payload.result.url, new RegExp(`^${base_url}/v1/jobs/${body.job_id}/result$`));
+
+    const file_res = await fetch(webhook_payload.result.url);
+    assert.equal(file_res.status, 200, 'result.url from the webhook payload must resolve, not 404');
+    const buf = Buffer.from(await file_res.arrayBuffer());
+    assert.equal(buf.length, webhook_payload.result.bytes);
   } finally {
     await new Promise(resolve => receiver.server.close(resolve));
   }

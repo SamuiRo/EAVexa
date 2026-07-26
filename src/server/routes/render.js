@@ -26,7 +26,7 @@ async function handle(req, res, ctx, build_raw) {
   const normalized = await normalize_request(raw_request, { registry: ctx.service.registry });
 
   if (normalized.mode === 'async') {
-    const { job } = await ctx.service.submit(raw_request);
+    const { job } = await ctx.service.submit(normalized, { normalized: true });
     const lane = normalized.video ? 'video' : 'image';
     const queue_position = ctx.service.queue.stats().queued[lane] ?? 0;
 
@@ -37,7 +37,7 @@ async function handle(req, res, ctx, build_raw) {
     return;
   }
 
-  const result = await ctx.service.render(raw_request);
+  const result = await ctx.service.render(normalized, { normalized: true });
   await persist_sync_job_record(ctx.service, normalized, result);
 
   if (idempotency_key) {

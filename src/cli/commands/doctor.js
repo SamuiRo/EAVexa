@@ -7,6 +7,7 @@ import { chromium } from 'playwright';
 import ffmpeg_static_path from 'ffmpeg-static';
 import { parse_args } from '../args.js';
 import { create_output } from '../output.js';
+import TemplateRegistry from '../../core/template_registry.js';
 import {
   CHROME_PATH, FFMPEG_PATH, TMP_DIR, OUTPUT_DIR, TEMPLATES_DIR, BUILTIN_TEMPLATES_DIR,
 } from '../../config/app_config.js';
@@ -54,9 +55,40 @@ async function run_checks() {
     ...(await check_ffmpeg_and_codecs()),
     await check_writable('TMP_DIR', TMP_DIR),
     await check_writable('OUTPUT_DIR', OUTPUT_DIR),
-    { name: 'BUILTIN_TEMPLATES_DIR', ok: true, detail: BUILTIN_TEMPLATES_DIR },
-    { name: 'TEMPLATES_DIR (user)', ok: true, detail: TEMPLATES_DIR },
+    ...(await check_templates()),
   ];
+}
+
+async function check_templates() {
+  const builtin_exists = existsSync(BUILTIN_TEMPLATES_DIR);
+  const user_exists = existsSync(TEMPLATES_DIR);
+
+  const checks = [
+    {
+      name: 'BUILTIN_TEMPLATES_DIR',
+      ok: builtin_exists,
+      detail: builtin_exists ? BUILTIN_TEMPLATES_DIR : `not found at ${BUILTIN_TEMPLATES_DIR}`,
+    },
+    {
+      // Missing is normal — a user template dir is optional — so this never fails the check.
+      name: 'TEMPLATES_DIR (user)',
+      ok: true,
+      detail: user_exists ? TEMPLATES_DIR : `not set — ${TEMPLATES_DIR} does not exist (optional)`,
+    },
+  ];
+
+  const registry = new TemplateRegistry({ builtin_dir: BUILTIN_TEMPLATES_DIR, user_dir: TEMPLATES_DIR });
+  const templates = await registry.list().catch(() => []);
+
+  checks.push({
+    name: 'Templates in registry',
+    ok: templates.length > 0,
+    detail: templates.length > 0
+      ? `${templates.length} found: ${templates.map(t => t.name).join(', ')}`
+      : 'none found — renders by template name will fail',
+  });
+
+  return checks;
 }
 
 function check_node_version() {

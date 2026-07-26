@@ -1,0 +1,17 @@
+{
+  "name": "story_pricing_pro",
+  "title": "Pricing — Pro plan",
+  "description": "Instagram story with the Pro pricing tier",
+  "version": "1.0.0",
+  "entry": "template.html",
+  "kind": "image",
+  "network": "required",
+  "default_format": "story",
+  "supported_formats": ["story", "post_portrait"],
+  "vars": [
+    { "name": "TITLE", "type": "string", "required": true,
+      "description": "Headline", "example": "Launch week", "max_length": 60 },
+    { "name": "PRICE", "type": "string", "required": true, "example": "$29" }
+  ],
+  "tags": ["pricing", "story", "en"]
+}

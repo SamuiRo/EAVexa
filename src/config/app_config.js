@@ -22,6 +22,10 @@ export const TMP_DIR = process.env.TMP_DIR ?? os.tmpdir();
 
 export const JOB_STORE_DIR = process.env.JOB_STORE_DIR ?? path.join(DATA_DIR, 'jobs');
 export const JOB_CACHE_SIZE = Number(process.env.JOB_CACHE_SIZE ?? 500);
+// How far back startup recovery scans for orphaned/pending jobs — job records
+// are never deleted (see docs/decisions.md Р3), so an unbounded scan grows
+// forever. A job idle longer than this is not worth recovering.
+export const JOB_RECOVERY_WINDOW_DAYS = Number(process.env.JOB_RECOVERY_WINDOW_DAYS ?? 7);
 
 // ─── Chromium / FFmpeg ───────────────────────────────────────────────────────
 
@@ -58,6 +62,8 @@ export const TEMPLATE_ALLOWED_HOSTS = process.env.TEMPLATE_ALLOWED_HOSTS
   : null;
 
 // ─── Webhooks ────────────────────────────────────────────────────────────────
+
+export const CALLBACK_INLINE_MAX_BYTES = Number(process.env.CALLBACK_INLINE_MAX_BYTES ?? 262144);
 
 export const WEBHOOK_SECRET       = process.env.WEBHOOK_SECRET ?? null;
 export const WEBHOOK_MAX_ATTEMPTS = Number(process.env.WEBHOOK_MAX_ATTEMPTS ?? 5);

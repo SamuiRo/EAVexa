@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, writeFile, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import TemplateRegistry from '../../src/core/template_registry.js';
 import { RenderError } from '../../src/core/errors.js';
+import { BUILTIN_TEMPLATES_DIR } from '../../src/config/app_config.js';
 
 async function make_template_dir(root, name, { manifest, html } = {}) {
   const dir = path.join(root, name);
@@ -94,6 +95,18 @@ test('resolve() rejects a path-traversal-looking template name', async () => {
     assert.equal(error.code, 'INVALID_REQUEST');
     return true;
   });
+});
+
+test('the real BUILTIN_TEMPLATES_DIR registry is non-empty and includes the templates docs reference (A3 regression)', async () => {
+  const registry = new TemplateRegistry({ builtin_dir: BUILTIN_TEMPLATES_DIR, user_dir: null });
+  const templates = await registry.list();
+
+  assert.ok(templates.length > 0, 'templates/ must ship at least one working template — see docs/audit_2.0.0.md A3');
+
+  const names = templates.map(t => t.name);
+  // Referenced throughout README.md, docs/*.md and docs/n8n/sync_image.json —
+  // the workflow a user imports into n8n first must actually resolve.
+  assert.ok(names.includes('story_pricing_pro'), `expected "story_pricing_pro" in registry, got: ${names.join(', ')}`);
 });
 
 test('read_html() returns the entry file contents', async () => {

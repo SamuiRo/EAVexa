@@ -1,12 +1,10 @@
 import { chromium }          from 'playwright';
-import { mkdir, readFile, writeFile } from 'fs/promises';
-import { pathToFileURL }      from 'url';
-import path                   from 'path';
 import { build_render_options } from '../../config/render_config.js';
 import { CHROME_PATH, NETWORK_TIMEOUT_MS, FONT_TIMEOUT_MS } from '../../config/app_config.js';
 import { build_launch_args, resolve_executable_path } from '../../shared/chromium.js';
-import { apply_vars, inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
-import { print, sleep }       from '../../shared/utils.js';
+import { inject_base_url, inject_font_preloads } from '../../shared/html_template.js';
+import { sleep }              from '../../shared/utils.js';
+import { log }                from '../../shared/logger.js';
 
 // ─── ImageRenderer ────────────────────────────────────────────────────────────
 
@@ -16,7 +14,7 @@ import { print, sleep }       from '../../shared/utils.js';
  * Usage:
  *   const renderer = new ImageRenderer();
  *   await renderer.connect();
- *   await renderer.render_file('./templates/post.html', './out.png', 'story');
+ *   const png = await renderer.render_html(html, 'story');
  *   await renderer.close();
  */
 export default class ImageRenderer {
@@ -118,67 +116,6 @@ export default class ImageRenderer {
     }
   }
 
-  /**
-   * Render an HTML file to a PNG file.
-   *
-   * @param {string}        template_path  Path to .html template
-   * @param {string}        output_path    Destination .png path
-   * @param {string|Object} format         Format key or raw dimensions
-   * @param {Object}        [vars]         Key→value replacements in the HTML ({{KEY}} syntax)
-   * @param {Object}        [opts]         Extra options forwarded to render_html()
-   * @returns {Promise<{ output_path: string, width: number, height: number, dpr: number }>}
-   */
-  async render_file(template_path, output_path, format, vars = {}, opts = {}) {
-    print(`Rendering: ${path.basename(template_path)}`, 'debug');
-
-    let html = await readFile(template_path, 'utf-8');
-    html = apply_vars(html, vars);
-
-    // Set base URL to the job's input folder so local assets resolve correctly
-    // (local fonts via @font-face src: url('./fonts/...'), images, etc.)
-    const base_url = opts.base_url ?? pathToFileURL(template_path).href;
-
-    const png_buffer = await this.render_html(html, format, { ...opts, base_url });
-
-    await mkdir(path.dirname(output_path), { recursive: true });
-    await writeFile(output_path, png_buffer);
-
-    const { viewport, device_scale_factor } = build_render_options(format);
-
-    return {
-      output_path,
-      width:  viewport.width  * device_scale_factor,
-      height: viewport.height * device_scale_factor,
-      dpr:    device_scale_factor,
-    };
-  }
-
-  /**
-   * Render multiple templates in one browser session (efficient batch).
-   *
-   * @param {Array<{ template: string, output: string, format: string|Object, vars?: Object }>} jobs
-   * @returns {Promise<Array>}
-   */
-  async render_batch(jobs) {
-    const results = [];
-
-    print(`Starting batch: ${jobs.length} job(s)`, 'system');
-
-    for (const job of jobs) {
-      const result = await this.render_file(
-        job.template,
-        job.output,
-        job.format,
-        job.vars  ?? {},
-        job.opts  ?? {},
-      );
-      results.push({ ...result, template: job.template });
-    }
-
-    print(`Batch complete`, 'system');
-    return results;
-  }
-
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
   /**
@@ -194,7 +131,7 @@ export default class ImageRenderer {
     ]);
 
     if (timed_out) {
-      print(`Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is`, 'warning');
+      log({ level: 'warn', msg: `Font loading exceeded ${this.font_timeout_ms}ms — rendering with fonts as-is` });
     }
   }
 }

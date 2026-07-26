@@ -26,6 +26,9 @@ CLI, async jobs + webhooks, HTTP server, deployment docs), plus CI and versionin
 deliberately skipped — not needed for a single-server deployment with n8n on the same
 machine; see [specification.md](specification.md) §16 for the full plan if that changes.
 
+- **[Audit 2.0.0](audit_2.0.0.md)** - аудит реалізації: 10 проблем, усі закриті у 2.0.1.
+  Збережено як історію — пояснює, чому код виглядає саме так, і на що дивитись,
+  якщо щось із цього повернеться. Коментарі в коді посилаються сюди за ID (A1–A11).
 - **[Specification](specification.md)** - головний документ: як має працювати CLI, HTTP API,
   webhooks і реєстр шаблонів. Пишемо код по ньому.
 - [Decisions](decisions.md) - обґрунтування ключових рішень (retention, доставка файлів,

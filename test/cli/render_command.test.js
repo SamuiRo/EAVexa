@@ -63,6 +63,52 @@ test('render -o - streams raw PNG bytes to stdout with no other stdout output', 
   }
 });
 
+test('render --json on a video prints exactly one JSON result line to stdout (A2 regression)', async () => {
+  const work_dir = await mkdtemp(path.join(tmpdir(), 'eavexa-cli-render-'));
+
+  try {
+    const template_path = path.join(work_dir, 'tpl.html');
+    await writeFile(template_path, '<html><body style="margin:0;background:#000"></body></html>', 'utf-8');
+    const out_path = path.join(work_dir, 'out.mp4');
+
+    const { stdout, stderr } = await run_cli([
+      'render', '--file', template_path, '--format', '200x200@1',
+      '--video-duration', '1', '--fps', '10', '-o', out_path, '--json',
+    ]);
+
+    const lines = stdout.split('\n').filter(Boolean);
+    assert.equal(lines.length, 1, 'stdout must contain exactly one line — renderer logs must not leak onto it');
+
+    const result = JSON.parse(lines[0]);
+    assert.equal(result.type, 'video');
+    assert.equal(result.local_path, out_path);
+
+    assert.match(stderr, /Capturing/);
+  } finally {
+    await rm(work_dir, { recursive: true, force: true });
+  }
+});
+
+test('render -o - on a video streams a valid MP4 with no other stdout output (A2 regression)', async () => {
+  const work_dir = await mkdtemp(path.join(tmpdir(), 'eavexa-cli-render-'));
+
+  try {
+    const template_path = path.join(work_dir, 'tpl.html');
+    await writeFile(template_path, '<html><body style="margin:0;background:#fff"></body></html>', 'utf-8');
+
+    const { stdout } = await run_cli(
+      ['render', '--file', template_path, '--format', '160x120@1', '--video-duration', '1', '--fps', '5', '-o', '-'],
+      { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 },
+    );
+
+    // MP4 files start with a 4-byte box size followed by the 'ftyp' box type —
+    // if renderer logs ever leak onto stdout again, this won't be at offset 4.
+    assert.equal(stdout.subarray(4, 8).toString('ascii'), 'ftyp');
+  } finally {
+    await rm(work_dir, { recursive: true, force: true });
+  }
+});
+
 test('render --dry-run prints the normalized request and writes nothing', async () => {
   const work_dir = await mkdtemp(path.join(tmpdir(), 'eavexa-cli-render-'));
 

@@ -1,0 +1,23 @@
+{
+  "name": "promo",
+  "title": "Promo video — animated product spotlight",
+  "description": "9:16 promo video: logo, headline, staggered feature tags and a pulsing CTA, choreographed with --eavexa-progress / --eavexa-time-ms (no keyframes needed).",
+  "version": "1.0.0",
+  "entry": "template.html",
+  "kind": "video",
+  "network": "required",
+  "default_format": "story",
+  "supported_formats": ["story", "post_square", "post_portrait"],
+  "video": { "duration": 8, "fps": 30 },
+  "vars": [
+    { "name": "TITLE", "type": "string", "required": false, "default": "STOP LAGGING",
+      "description": "Headline / hook", "example": "STOP LAGGING", "max_length": 40 },
+    { "name": "SUBTITLE", "type": "string", "required": false, "default": "PC tuning, done right",
+      "description": "Supporting line under the headline", "example": "PC tuning, done right", "max_length": 60 },
+    { "name": "CTA", "type": "string", "required": false, "default": "BOOK TODAY",
+      "description": "Call-to-action button text", "example": "BOOK TODAY", "max_length": 30 },
+    { "name": "HANDLE", "type": "string", "required": false, "default": "@coretunegg",
+      "description": "Handle shown at the bottom", "example": "@coretunegg", "max_length": 30 }
+  ],
+  "tags": ["promo", "video", "en"]
+}
