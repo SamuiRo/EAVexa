@@ -15,6 +15,25 @@ const VIDEO_MIME_TYPES = {
   '.mkv':  'video/x-matroska',
 };
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Turn a source's base_dir into a base URL the renderer can use. A local
+ * directory path has to become a `file://` URL with a trailing slash —
+ * a raw path in `<base href>` resolves nothing, and the renderer only primes
+ * a local file origin for `file://` bases. Values that are already URLs
+ * (a remote base for inline HTML) are passed through untouched.
+ *
+ * @param {string|null} base_dir
+ * @returns {string|null}
+ */
+function to_base_url(base_dir) {
+  if (!base_dir) return null;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(base_dir)) return base_dir;
+
+  return pathToFileURL(base_dir.endsWith(path.sep) ? base_dir : base_dir + path.sep).href;
+}
+
 /**
  * The one core render entry point behind every front-end (CLI, HTTP,
  * legacy jobs.json). See docs/specification.md §5.11.
@@ -235,11 +254,11 @@ export default class RenderService {
     switch (source.kind) {
       case 'registry': {
         const html = await this.registry.read_html(source.name);
-        return { html, base_url: pathToFileURL(source.base_dir + path.sep).href };
+        return { html, base_url: to_base_url(source.base_dir) };
       }
 
       case 'inline':
-        return { html: source.html, base_url: source.base_dir };
+        return { html: source.html, base_url: to_base_url(source.base_dir) };
 
       case 'file': {
         const html = await readFile(source.path, 'utf-8');

@@ -67,6 +67,12 @@ Every response carries `X-Request-Id` (echoes an inbound one, or mints a fresh o
 `source` — exactly one of `name` (registry), `html` (inline), `path` (local file, mainly
 for same-host tooling), `url` (fetched, subject to `TEMPLATE_ALLOWED_HOSTS`).
 
+Relative asset paths in the template resolve against its own folder, which `name`, `path`,
+and `url` sources already know. Inline `html` has none, so add `"base_dir"` next to it —
+either a local directory (`{"html": "…", "base_dir": "/srv/assets/promo"}`) or an
+`http(s)` base URL — whenever the markup references `./images/…`, `./videos/…`, or local
+fonts. Without it those assets render blank.
+
 **Sync vs. async** — if `callback_url` or `"mode":"async"` is given, or the request is
 expensive enough (`cost.frames > SYNC_MAX_COST`, default 90 frames), the server responds
 `202` immediately and renders in the background; otherwise it responds once the render is

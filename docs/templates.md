@@ -12,6 +12,7 @@ data/inputs/<job_id>/
   template.html
   fonts/
   images/
+  videos/
 ```
 
 ```json
@@ -32,6 +33,7 @@ templates/story_pricing_pro/        (or data/templates/story_pricing_pro/)
   preview.png                       # optional — served by GET /v1/templates/:name/preview
   fonts/
   images/
+  videos/
 ```
 
 Both paths end up in the exact same place: an HTML file, substituted the same way
@@ -182,6 +184,36 @@ Reference them with relative URLs:
 ```html
 <img src="./images/product.png" alt="">
 ```
+
+Relative paths resolve against the template's own folder. That folder is known
+automatically for registry templates, `--file`/`source.path` renders, and `jobs.json`
+entries. Inline HTML (`source.html`, `--stdin`) has no folder of its own — pass
+`source.base_dir` alongside it if the markup references local assets, otherwise use
+absolute `http(s)` URLs or `data:` URIs.
+
+## Local Videos
+
+Put video files in a `videos/` folder and reference them the same way:
+
+```text
+data/inputs/promo_story/
+  template.html
+  videos/
+    loop.mp4
+```
+
+```html
+<video src="./videos/loop.mp4" muted playsinline style="width:100%;height:100%;object-fit:cover"></video>
+```
+
+EAVexa takes over playback automatically — image jobs freeze the video on its first frame,
+video jobs seek it per captured frame so it loops in step with the render. No
+`eavexa_render_frame` code is needed. See
+[Video elements](video_rendering.md#video-elements-video-tag) for the details and the
+`data-eavexa-skip` opt-out.
+
+The bundled Playwright Chromium decodes H.264 (`.mp4`) and VP8/VP9/AV1 (`.webm`).
+H.265/HEVC and Theora are not supported.
 
 ## Local Fonts
 

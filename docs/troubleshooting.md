@@ -145,6 +145,50 @@ Use:
 
 Avoid absolute local paths in templates because they are harder to move between machines.
 
+Relative paths need a template folder to resolve against. Registry templates,
+`--file`/`source.path`, and `jobs.json` entries all have one. **Inline HTML**
+(`source.html`, `eavexa render --stdin`) does not — pass `source.base_dir` next to the
+markup, or the asset silently renders blank. Remote `source.url` templates resolve
+relative paths against the URL as usual.
+
+## `<video>` Renders Blank Or Black
+
+Work through these in order:
+
+1. **Codec.** The bundled Playwright Chromium decodes H.264 (`.mp4`) and VP8/VP9/AV1
+   (`.webm`). H.265/HEVC and Theora are not supported — re-encode the clip:
+
+   ```bash
+   ffmpeg -i input.mov -c:v libx264 -pix_fmt yuv420p -an videos/loop.mp4
+   ```
+
+2. **Path.** A local `<video src="./videos/loop.mp4">` resolves the same way as an
+   `<img>` — see *Images Do Not Load* above.
+3. **`data-eavexa-skip`.** A video carrying this attribute is left entirely alone, so it
+   shows whatever the template itself put on screen. Remove the attribute to hand control
+   back to EAVexa.
+4. **A `Video metadata loading exceeded …ms` warning in the log** means the clip never
+   reported its duration within `VIDEO_TAG_TIMEOUT_MS` (default `5000`). Rendering
+   continues with videos untouched, which usually looks like a blank element. A large
+   remote clip may just need a higher limit; a local clip that trips this is normally a
+   codec or path problem instead.
+
+## `Frame N: … video seek(s) exceeded …ms` Warnings
+
+Each frame waits for the browser's `seeked` event before the screenshot, bounded by
+`VIDEO_TAG_TIMEOUT_MS` capped at `2000`ms. Frequent warnings mean seeking is slower than
+that limit, and those frames may capture a stale image.
+
+Long-GOP clips are the usual cause — seeking to an arbitrary timestamp forces the decoder
+back to the previous keyframe. Re-encode with dense keyframes:
+
+```bash
+ffmpeg -i input.mp4 -c:v libx264 -g 12 -keyint_min 12 -pix_fmt yuv420p -an videos/loop.mp4
+```
+
+Shrinking the clip to the rendered element's actual pixel size helps too — a 4K source
+scaled into a 1080px box decodes 4K frames for nothing.
+
 ## Output Is Cropped
 
 The HTML dimensions must match the selected format.
@@ -170,7 +214,9 @@ Avoid real-time animation state:
 - `setInterval()`
 - random values
 - cursor or hover state
-- real media playback time
+
+`<video>` elements are the exception — EAVexa pauses them and seeks each one per captured
+frame, so a plain `<video>` tag is already deterministic and needs no special handling.
 
 Prefer deterministic frame control:
 

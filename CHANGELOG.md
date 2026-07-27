@@ -5,6 +5,30 @@ All notable changes to this project are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **`<video preload="none">` stalled every render for the full `VIDEO_TAG_TIMEOUT_MS`
+  and then rendered nothing.** The metadata wait listened for `loadedmetadata` without
+  ever kicking the load off, and `preload="none"` means the browser never fetches
+  metadata on its own — so the event never fired, the wait always timed out (measured
+  ~5.8s vs ~0.8s per render), `duration` stayed unknown, and every frame captured an
+  empty video element. Non-skipped videos are now switched to `preload="auto"` and
+  `load()`ed before the wait.
+- **The last frame of a video render wrapped back to the clip's first frame.** Per-frame
+  seeking used `time_s`, which `_build_frame_state` spans over `[0, duration]` *inclusive*
+  — so the final frame lands exactly on `duration` and `duration % clip_duration` is `0`
+  whenever the clip is as long as the render (or divides it). It also spaced samples
+  `duration/(total_frames - 1)` apart instead of `1/fps`, drifting video content off
+  real time. Seeking now uses `frame_time_s` (`frame / fps`), which never reaches the
+  endpoint and matches playback speed. CSS animations still follow `time_s`.
+- **Inline HTML sources could not resolve local assets.** `source.base_dir` was passed
+  through as a raw filesystem path, producing an unusable `<base href="C:\...">` and
+  skipping the `file://` origin priming added in 2.0.2 — so the fix below never reached
+  `source.html` requests. Local `base_dir` values are now converted to `file://` URLs for
+  every source kind; values that are already URLs (a remote base for inline HTML) pass
+  through untouched.
+
+## [2.0.2] - 2026-07-26
+
 ### Added
 - Deterministic `<video>` tag rendering. `<video>` elements embedded in a template
   are now paused, muted, and taken off `autoplay`/`loop` on load, then seeked to

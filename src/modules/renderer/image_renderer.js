@@ -158,6 +158,14 @@ export default class ImageRenderer {
             video.autoplay = false;
             video.loop = false;
 
+            // preload="none" means the browser never fetches metadata on its
+            // own, so `loadedmetadata` would never fire and the wait below
+            // would burn the whole timeout and still render a blank video.
+            if (video.preload === 'none') {
+              video.preload = 'auto';
+              video.load();
+            }
+
             const freeze_at_start = () => {
               if (video.currentTime === 0) {
                 resolve();

@@ -20,6 +20,7 @@
 | --- | --- | --- |
 | `NETWORK_TIMEOUT_MS` | `15000` | ліміт очікування мережевих ресурсів сторінки |
 | `FONT_TIMEOUT_MS` | `5000` | ліміт `document.fonts.ready`; після нього рендеримо як є + `warning` |
+| `VIDEO_TAG_TIMEOUT_MS` | `5000` | ліміт завантаження метаданих `<video>`; після нього рендеримо як є + `warning` |
 | `--offline` / `"options":{"offline":true}` | `false` | блокує всі зовнішні запити (`page.route`) — детермінований рендер, лише локальні ассети |
 | `--strict-assets` / `"options":{"strict_assets":true}` | `false` | будь-який провалений запит = помилка `ASSET_LOAD_FAILED`, а не тихий фолбек |
 
@@ -384,6 +385,7 @@ NODE_OPTIONS=--max-old-space-size=2048
 | `PERSIST_SYNC_RENDERS` | `true` | писати на диск також синхронні рендери |
 | `NETWORK_TIMEOUT_MS` | `15000` | зовнішні ресурси сторінки |
 | `FONT_TIMEOUT_MS` | `5000` | `document.fonts.ready` |
+| `VIDEO_TAG_TIMEOUT_MS` | `5000` | метадані `<video>`; перемотка кадру — не більше `2000` |
 | `CHROME_SANDBOX` | `auto` | `--no-sandbox` лише в контейнері |
 | `RESULT_TOKEN_SECRET` | `null` | підписані `?token=` для `/result` |
 | `S3_*` | — | endpoint, bucket, key/secret, region, `force_path_style` для MinIO |

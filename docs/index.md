@@ -10,8 +10,8 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 - [Deployment](deployment.md) - bare metal (systemd/NSSM/Task Scheduler/pm2) and Docker.
 - [n8n integration](n8n.md) - ready-to-import workflows for sync and async rendering.
 - [Jobs configuration](jobs.md) - every supported `data/jobs.json` field.
-- [HTML templates](templates.md) - how to structure HTML, assets, fonts, placeholders, and the `template.json` manifest.
-- [HTML to video rendering](video_rendering.md) - deterministic animation rendering and FFmpeg output.
+- [HTML templates](templates.md) - how to structure HTML, assets, fonts, video files, placeholders, and the `template.json` manifest.
+- [HTML to video rendering](video_rendering.md) - deterministic animation rendering, embedded `<video>` footage, and FFmpeg output.
 - [Troubleshooting](troubleshooting.md) - common failures and fixes.
 
 ## Maintainer Guides
@@ -20,11 +20,15 @@ This documentation explains how to use, extend, and troubleshoot EAVexa.
 
 ## EAVexa 2.0 — Pipeline Integration
 
-**Released as 2.0.0** — see [CHANGELOG.md](../CHANGELOG.md). Крок 0-5 done (fixes, core,
-CLI, async jobs + webhooks, HTTP server, deployment docs), plus CI and versioning from
-Крок 6. S3/push storage drivers, `/metrics`, rate limiting, and `templates vendor` were
-deliberately skipped — not needed for a single-server deployment with n8n on the same
-machine; see [specification.md](specification.md) §16 for the full plan if that changes.
+**Released as 2.0.0, current line 2.0.x** — see [CHANGELOG.md](../CHANGELOG.md). Крок 0-5
+done (fixes, core, CLI, async jobs + webhooks, HTTP server, deployment docs), plus CI and
+versioning from Крок 6. S3/push storage drivers, `/metrics`, rate limiting, and
+`templates vendor` were deliberately skipped — not needed for a single-server deployment
+with n8n on the same machine; see [specification.md](specification.md) §16 for the full
+plan if that changes.
+
+2.0.2 added deterministic `<video>` tag rendering and fixed local relative assets, which
+had never actually loaded — see [video_rendering.md](video_rendering.md#video-elements-video-tag).
 
 - **[Audit 2.0.0](audit_2.0.0.md)** - аудит реалізації: 10 проблем, усі закриті у 2.0.1.
   Збережено як історію — пояснює, чому код виглядає саме так, і на що дивитись,

@@ -10,6 +10,7 @@ import RenderQueue from '../../src/core/render_queue.js';
 import StorageAdapter from '../../src/core/storage_adapter.js';
 import { RenderError } from '../../src/core/errors.js';
 import { read_png_size } from '../support/png_size.js';
+import { make_test_image } from '../support/test_image.js';
 
 let output_dir;
 let builtin_dir;
@@ -103,6 +104,33 @@ test('renders an image from a direct file source (the legacy jobs.json path)', a
     assert.equal(result.height, 10);
   } finally {
     await rm(template_dir, { recursive: true, force: true });
+  }
+});
+
+test('an inline html source resolves relative local assets against its base_dir', async () => {
+  const fixture = await make_test_image({ size: '32x32' });
+
+  try {
+    const render_with = async (src, dir) => {
+      const result = await service.render({
+        source: { html: `<html><body style="margin:0;background:#fff"><img src="${src}" style="width:32px;height:32px"></body></html>`, base_dir: fixture.dir },
+        format: { width: 32, height: 32, device_scale_factor: 1 },
+        output: { filename: 'inline.png', dir },
+      });
+
+      const { readFile } = await import('fs/promises');
+      return (await readFile(result.local_path)).toString('base64');
+    };
+
+    // base_dir is a plain filesystem path — it has to become a file:// URL, or
+    // the <base href> is unusable and the local file origin never gets primed.
+    assert.notEqual(
+      await render_with('./test.png', 'job_inline_ok'),
+      await render_with('./does-not-exist.png', 'job_inline_missing'),
+      'an inline template referencing a real local image must render differently than one referencing a missing file',
+    );
+  } finally {
+    await fixture.cleanup();
   }
 });
 

@@ -829,6 +829,7 @@ templates/story_pricing_pro/
 | `SYNC_MAX_COST` | `90` | кадрів; більше → примусово async |
 | `NETWORK_TIMEOUT_MS` | `15000` | зовнішні ресурси сторінки |
 | `FONT_TIMEOUT_MS` | `5000` | `document.fonts.ready` |
+| `VIDEO_TAG_TIMEOUT_MS` | `5000` | метадані `<video>`; перемотка кадру — не більше `2000` |
 | `SETTLE_MS` | `200` / `100` | пауза перед знімком (image / video) |
 | `BROWSER_MAX_RENDERS` | `200` | плановий перезапуск браузера |
 | `CHROME_SANDBOX` | `auto` | `auto` \| `on` \| `off` |

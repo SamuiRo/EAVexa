@@ -8,26 +8,26 @@
 
 ## Project overview
 
-<!-- Fill in when starting a new project -->
-
-**Name:** [Project name]  
-**Type:** [CLI tool | REST API | Bot | Scraper | MCP server | Web app]  
-**Purpose:** [One sentence — what does this do and why]  
-**Status:** [In development | Active | Maintenance]
+**Name:** EAVexa  
+**Type:** CLI tool + REST API + batch runner (one core render service behind all three)  
+**Purpose:** Render HTML templates to PNG images and MP4/WebM/MOV/MKV videos, pixel-accurately and deterministically.  
+**Status:** Active (2.0.x)
 
 ---
 
 ## Tech stack
 
-| Layer       | Technology                        |
-|-------------|-----------------------------------|
-| Runtime     | Node.js (ESM, `"type": "module"`) |
-| Language    | JavaScript (no TypeScript)        |
-| Package mgr | npm                               |
-| Database    | SQLite / none                     |
-| HTTP client | axios / fetch                     |
-| Other       | [list key libraries]              |
-
+| Layer       | Technology                                        |
+|-------------|---------------------------------------------------|
+| Runtime     | Node.js >=18 (ESM, `"type": "module"`)            |
+| Language    | JavaScript (no TypeScript)                        |
+| Package mgr | npm                                               |
+| Browser     | Playwright + Chromium (rendering and screenshots) |
+| Encoding    | FFmpeg via `ffmpeg-static` (bundled binary)       |
+| Persistence | JSON files under `data/` — no database            |
+| HTTP        | Node `node:http` server, global `fetch` client    |
+| CLI output  | `chalk`, `gradient-string`                        |
+| Tests       | `node --test` (no external test runner)           |
 
 ---
 
@@ -95,71 +95,52 @@ import { chunk, unique, format_bytes, format_duration } from './shared/utils.js'
 
 ---
 
-## Environment variables
+## Source map
 
-All env vars are centralized in `src/config/app_config.js`.  
-Never access `process.env` directly outside that file.  
-See `.env.example` for required variables.
+| Location                    | Responsibility                                                        |
+|-----------------------------|-----------------------------------------------------------------------|
+| `src/core/`                 | `RenderService` (the single render entry point), queue, browser pool, job store, storage, template registry, webhook notifier |
+| `src/modules/renderer/`     | `ImageRenderer`, `VideoRenderer`, `FfmpegEncoder`                     |
+| `src/modules/jobs/`         | `jobs.json` loading and render-job building                           |
+| `src/modules/orchestrator/` | Batch run orchestration and result reporting                          |
+| `src/cli/`                  | `eavexa` command and subcommands                                      |
+| `src/server/`               | HTTP server, router, routes, auth                                     |
+| `src/config/`               | `app_config.js` (all env vars), `render_config.js` (formats)          |
+| `src/shared/`               | `utils.js`, `logger.js`, `messages.js`, `html_template.js`, `chromium.js` |
 
----
+There is no database module and no secrets module — see *Configuration* below.
 
-## Optional built-in modules
-
-| Module   | Location                          | Use when                              |
-|----------|-----------------------------------|---------------------------------------|
-| DbManager | `src/modules/db/index.js`        | Project uses SQLite storage           |
-| Logger   | `src/modules/logger/index.js`     | Need persistent log files in `data/logs/` |
-
-**DbManager quick reference:**
-```js
-const db = new DbManager();   // uses DB_PATH from config
-await db.connect();            // opens connection + runs migrations
-db.run(sql, params)            // INSERT / UPDATE / DELETE
-db.get(sql, params)            // single row or undefined
-db.all(sql, params)            // all matching rows
-db.transaction(fn)             // atomic multi-statement block
-db.close()                     // clean shutdown
-```
+**Logging:** `src/shared/logger.js` exports `log({ level, msg })` and is what `src/core/`,
+`src/server/`, and `src/modules/renderer/` use. `print()` from `utils.js` is for CLI-facing
+output. Do not use raw `console.log` in either case.
 
 ---
 
 ## Key conventions for AI agents
 
 1. **Never** access `process.env` outside `app_config.js`
-2. **Always** use `print()` from utils — never raw `console.log` in modules
+2. **Never** use raw `console.log` — `log({ level, msg })` from `shared/logger.js` inside
+   the render pipeline, `print()` from `shared/utils.js` for CLI-facing output
 3. **Always** use `async/await` — no `.then()` chains
+4. **Always** handle errors with `try/catch` — no silent failures
 5. Shared helpers go in `src/shared/utils.js` as exported functions
 6. Static strings go in `src/shared/messages.js`
 7. The `data/` directory is runtime-only and gitignored — never hardcode paths, use `DATA_DIR` from config
-8. `sharp` are optional — only install if the project uses them
+8. Tests use `node --test` only — do not add a test framework dependency
+9. Every render path goes through `RenderService` — CLI, HTTP, and `jobs.json` must not
+   call the renderers directly
 
 ---
 
-## Secrets management
+## Configuration
 
-Secrets (API keys, tokens, passwords) are stored in the OS keychain — NOT in `.env`.
+This project has no keychain integration and no `secrets_cli.js`. Configuration is plain
+environment variables, read from `.env` in local development via `dotenv`.
 
-**Platform:** Windows Credential Manager / Linux libsecret / macOS Keychain  
-**CLI tool:** `secrets_cli.js` (project root)  
-**Module:** `src/modules/secrets/index.js`
+- Every variable is read in `src/config/app_config.js` and exported as a constant.
+- Never touch `process.env` anywhere else.
+- Every variable has a working default, so an empty `.env` still runs.
+- `.env.example` documents all of them; `docs/architecture.md` has the reference table.
 
-```bash
-# First-time setup: move .env contents to keychain
-npm run secrets:import
-
-# Day-to-day
-npm run secrets:list                        # list all stored keys
-node secrets_cli.js set API_KEY             # add/update a secret (prompts for value)
-node secrets_cli.js get API_KEY             # print a value
-node secrets_cli.js delete API_KEY          # remove
-node secrets_cli.js export                  # dump to .env.exported (gitignored)
-```
-
-**In code — never `process.env` for secrets. Use async getters from config:**
-```js
-import { get_telegram_token } from '../../config/app_config.js';
-const token = await get_telegram_token();
-```
-
-**In production / Docker:** set env vars normally — `secret()` checks `process.env` first,
-keychain is only used as fallback for local dev.
+`RESULT_TOKEN_SECRET` and `EAVEXA_API_KEY` are the only genuinely secret values. In production
+and Docker they are set as real environment variables, not committed to `.env`.

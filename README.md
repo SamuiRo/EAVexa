@@ -11,6 +11,8 @@ It uses Playwright + Chromium for pixel-accurate HTML rendering. Image jobs expo
 - Render PNG images from HTML templates.
 - Render MP4, WebM, MOV, and MKV videos from animated HTML.
 - Support local fonts, images, SVG, CSS, and JavaScript-driven layouts.
+- Composite embedded `<video>` footage deterministically — paused and seeked per captured
+  frame, looping clips shorter than the render, with no template code required.
 - Inject variables through `{{PLACEHOLDER}}` values in `data/jobs.json`.
 - Keep input templates and output artifacts organized per job.
 

@@ -165,23 +165,34 @@ data/jobs.json
 
 1. Opens Chromium (via `BrowserPool`, lazily on first use).
 2. Creates a fresh browser context with the requested viewport and DPR.
-3. Loads the HTML template (vars already substituted, `<base href>` already injected).
-4. Waits for network idle and fonts, each bounded by its own timeout.
-5. Captures a PNG screenshot.
+3. Navigates to the template's own directory when the base URL is `file://`, so the
+   document has a real local origin — `page.setContent()` alone leaves it at
+   `about:blank`, where Chromium refuses every local subresource. See
+   `prime_local_file_origin()` in `src/shared/chromium.js`.
+4. Loads the HTML template (vars already substituted, `<base href>` already injected).
+5. Waits for network idle and fonts, each bounded by its own timeout.
+6. Pauses, mutes, and freezes every `<video>` on its first frame, bounded by
+   `VIDEO_TAG_TIMEOUT_MS` — the counterpart to screenshotting with
+   `animations: 'disabled'`. Elements marked `data-eavexa-skip` are left alone.
+7. Captures a PNG screenshot.
 
 `video_renderer.js`:
 
 1. Opens Chromium (via `BrowserPool`).
 2. Creates a browser context with the requested viewport and DPR.
-3. Loads the HTML template.
-4. For each frame:
+3. Loads the HTML template, priming the local `file://` origin exactly as above.
+4. Pauses and mutes every non-skipped `<video>` and waits for its metadata, so
+   `duration` is known before the frame loop starts.
+5. For each frame:
    - computes `progress`, `time_s`, and frame metadata;
    - pauses Web Animations and sets their `currentTime`;
+   - seeks each `<video>` to `frame_time_s % video.duration` and awaits the `seeked`
+     event, so short clips loop and the screenshot never races a decoding frame;
    - calls `window.eavexa_render_frame(...)` when provided;
    - captures `frame_000000.png`, `frame_000001.png`, and so on;
    - reports progress via `on_progress({ phase, current, total, ratio })`.
-5. Calls `FfmpegEncoder`, writing directly to a `TMP_DIR` temp path.
-6. `RenderService` hands the encoded temp file to `StorageAdapter.finalize()`, which
+6. Calls `FfmpegEncoder`, writing directly to a `TMP_DIR` temp path.
+7. `RenderService` hands the encoded temp file to `StorageAdapter.finalize()`, which
    moves it into place atomically (with a copy+delete fallback across drives) and
    removes temporary frames unless `keep_frames` is enabled.
 
@@ -280,6 +291,7 @@ Current environment-backed settings (see `.env.example`):
 | `FFMPEG_PATH` | Optional explicit FFmpeg executable path. |
 | `NETWORK_TIMEOUT_MS` | Max time to wait for page network activity to settle (default `15000`). Bounds `page.setContent`/`networkidle` so a dead CDN or polling template can't hang the render forever. |
 | `FONT_TIMEOUT_MS` | Max time to wait for `document.fonts.ready` (default `5000`). Rendering proceeds with a warning if exceeded. |
+| `VIDEO_TAG_TIMEOUT_MS` | Max time to wait for `<video>` elements to load metadata (default `5000`). Also bounds the per-frame seek wait during video jobs, capped at `2000`. Rendering proceeds with a warning if exceeded. |
 | `BROWSER_MAX_RENDERS` | Renders per browser kind before `BrowserPool` restarts it (default `200`). |
 | `RENDER_CONCURRENCY` / `VIDEO_CONCURRENCY` | `RenderQueue` lane concurrency (default `3` / `1`). |
 | `QUEUE_MAX` | Max combined queued+running renders before `QUEUE_FULL` (default `100`). |

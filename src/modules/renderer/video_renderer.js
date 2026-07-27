@@ -210,6 +210,14 @@ export default class VideoRenderer {
         video.muted = true;
         video.autoplay = false;
         video.loop = false;
+
+        // preload="none" means the browser never fetches metadata on its own,
+        // so `loadedmetadata` would never fire and the wait below would burn
+        // the whole timeout, leaving `duration` unknown and every frame blank.
+        if (video.preload === 'none') {
+          video.preload = 'auto';
+          video.load();
+        }
       }
     });
 
@@ -266,6 +274,10 @@ export default class VideoRenderer {
 
       // Videos loop over their own duration so a short background clip keeps
       // playing for the full render instead of freezing on its last frame.
+      // Sampled at `frame_time_s` (frame / fps) rather than `time_s`, which
+      // spans [0, duration] inclusive: that stretches the gap between frames
+      // to duration/(total-1) and lands the final frame exactly on `duration`,
+      // so a clip as long as the render would wrap back to its first frame.
       const videos = Array.from(document.querySelectorAll('video'))
         .filter(video => !video.hasAttribute('data-eavexa-skip'));
       let failed_video_seek_count = 0;
@@ -278,7 +290,7 @@ export default class VideoRenderer {
           return;
         }
 
-        const target = state.time_s % duration;
+        const target = state.frame_time_s % duration;
 
         if (Math.abs(video.currentTime - target) < 0.001) {
           resolve();

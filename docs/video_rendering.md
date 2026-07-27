@@ -91,9 +91,16 @@ The frame state contains:
 | `progress` | Normalized progress from `0` to `1`. |
 | `time_s` | Render timeline time in seconds from `0` to `duration`. |
 | `time_ms` | Same timeline time in milliseconds. |
-| `frame_time_s` | Encoded video timestamp: `frame / fps`. |
+| `frame_time_s` | Encoded video timestamp: `frame / fps`. Also drives `<video>` seeking. |
 
 Use `progress` for most animations. Use `time_s` when you need time-based motion.
+
+`time_s` and `frame_time_s` are close but not identical. `time_s` spreads the frames
+evenly across `[0, duration]` **inclusive**, so the first frame sits at `0` and the last
+lands exactly on `duration` — ideal for an animation that must finish on its end state.
+`frame_time_s` is the timestamp the frame actually gets in the encoded file (`frame / fps`),
+which advances in real time and never reaches `duration`. Embedded `<video>` elements are
+seeked on `frame_time_s` so their content plays at true speed.
 
 ## Built-in CSS variables
 
@@ -247,12 +254,18 @@ automatically — no `eavexa_render_frame` code required:
   loads, so real-time playback never drifts out of sync with frame capture.
 - EAVexa waits for each video's metadata (`duration`) to load before the frame loop
   starts, bounded by `VIDEO_TAG_TIMEOUT_MS` (default `5000`ms) — a stuck video logs a
-  warning and rendering proceeds with videos as-is rather than hanging.
-- Before every frame, each video is seeked to `time_s % video.duration`, so a clip
+  warning and rendering proceeds with videos as-is rather than hanging. A video marked
+  `preload="none"` is switched to `preload="auto"` first, since the browser would
+  otherwise never load metadata at all.
+- Before every frame, each video is seeked to `frame_time_s % video.duration`, so a clip
   shorter than the render `duration` **loops** instead of freezing on its last frame.
   A clip longer than `duration` never reaches its end. EAVexa waits for the browser's
   `seeked` event (bounded per-frame, capped at 2000ms) before the screenshot is taken.
-- Seeking runs in parallel with Web Animations pausing and before
+- Videos are sampled at `frame_time_s` (`frame / fps`) rather than the `time_s` that
+  drives CSS animations. `time_s` spans `[0, duration]` inclusive, so its last frame
+  lands exactly on `duration` — a clip as long as the render would wrap straight back
+  to its first frame. `frame_time_s` advances in real time and never hits that endpoint.
+- Seeking happens after Web Animations are paused and before
   `window.eavexa_render_frame(...)` is called, so the hook can read `video.currentTime`
   already updated for the frame if it needs to react to it.
 
@@ -284,10 +297,13 @@ PNG output. See [Image Rendering Notes](templates.md#image-rendering-notes).
 ## Rules for reliable templates
 
 - Keep the template size fixed with CSS, matching the selected `format`.
-- Prefer local assets in the job folder: `fonts/`, `images/`, video-safe SVGs.
+- Prefer local assets in the job folder: `fonts/`, `images/`, `videos/`, video-safe SVGs.
 - Use `font-display: block` for local and Google fonts.
 - Avoid `setInterval()` and `setTimeout()` for animation state.
-- Avoid relying on real playback time, hover state, cursor position, or random values.
+- Avoid relying on hover state, cursor position, or random values. A plain `<video>` tag
+  is safe — EAVexa drives its playback per frame rather than in real time.
+- Encode embedded clips as H.264 `.mp4` or VP9 `.webm`, with dense keyframes so per-frame
+  seeking stays fast. H.265/HEVC is not decodable by the bundled Chromium.
 - If randomness is needed, use fixed values or a seeded generator.
 - Avoid CSS transitions for timeline-critical animation; use direct styles in `eavexa_render_frame`.
 - Use `keep_frames: true` when debugging visual artifacts.
