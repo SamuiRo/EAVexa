@@ -6,6 +6,19 @@ All notable changes to this project are documented here. Format loosely follows
 ## [Unreleased]
 
 ### Fixed
+- **CI was red on Node 18 and 20: the test suite never started.** `npm test` ran
+  `node --test "test/**/*.test.js"`, but `node --test` only expands glob patterns itself
+  from Node 21 on — on older runtimes the pattern is taken as a literal path and the job
+  dies with `Could not find '<cwd>/test/**/*.test.js'`. `npm test` now goes through
+  `scripts/run_tests.mjs`, which walks `test/` and hands `node --test` explicit paths. This
+  also fixes `npm test` on Windows, where no shell expands the glob either.
+- **Eight browser- and server-backed test files ran without their setup on Node 20 and
+  older.** Their `before`/`after` hooks sat at the file top level, and root-level hooks are
+  not awaited before the first test on those runtimes (verified: fails on 20.14, works on
+  21.7 and 22.17) — so every test in them hit an unconnected renderer
+  (`Call connect() before render_html()`) and the run then hung on the Chromium instance the
+  hook had opened in the background. The hooks now live inside a `describe()` block, which
+  behaves identically on every supported runtime. Suite is 131/131 green on Node 20 and 22.
 - **`<video preload="none">` stalled every render for the full `VIDEO_TAG_TIMEOUT_MS`
   and then rendered nothing.** The metadata wait listened for `loadedmetadata` without
   ever kicking the load off, and `preload="none"` means the browser never fetches

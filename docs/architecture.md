@@ -345,7 +345,14 @@ For a new video container:
 npm test
 ```
 
-Runs `node --test` over `test/**/*.test.js` and `test/core/**/*.test.js`:
+`scripts/run_tests.mjs` collects every `*.test.js` under `test/` (recursively) and runs
+them through `node --test` as explicit paths — `node --test` only expands glob patterns
+itself from Node 21 on, and the project supports Node >= 18.
+
+Suites that need setup (a Chromium instance, a live HTTP server, a temp fixture) keep their
+`before`/`after` hooks **inside** a `describe()` block. Root-level hooks are not awaited
+before the first test on Node 20 and older: the tests run against unconnected objects and
+the process then hangs on whatever the hook opened. Coverage:
 
 - unit tests for `shared/html_template.js` (var escaping, `{{{RAW}}}`, `<base href>`
   injection), `RenderJobBuilder`/`JobLoader` validation, `core/ids.js`, `core/errors.js`;

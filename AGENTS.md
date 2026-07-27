@@ -126,7 +126,10 @@ output. Do not use raw `console.log` in either case.
 5. Shared helpers go in `src/shared/utils.js` as exported functions
 6. Static strings go in `src/shared/messages.js`
 7. The `data/` directory is runtime-only and gitignored — never hardcode paths, use `DATA_DIR` from config
-8. Tests use `node --test` only — do not add a test framework dependency
+8. Tests use `node --test` only — do not add a test framework dependency. Run them with
+   `npm test` (→ `scripts/run_tests.mjs`), and keep `before`/`after` hooks **inside** a
+   `describe()` block — root-level hooks are not awaited before the first test on Node 20
+   and older, which silently runs every test without its setup
 9. Every render path goes through `RenderService` — CLI, HTTP, and `jobs.json` must not
    call the renderers directly
 
