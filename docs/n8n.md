@@ -2,7 +2,7 @@
 
 Two ready-to-import workflows live in `docs/n8n/`: `sync_image.json` (one HTTP node,
 blocking) and `async_video.json` (submit + Wait-for-webhook, non-blocking). Both assume
-EAVexa is reachable at `http://localhost:8080` — same-machine bare metal, the target
+EAVexa is reachable at `http://localhost:8123` — same-machine bare metal, the target
 deployment (`docs/deployment.md`).
 
 > **Node schema caveat:** these were hand-written against a recent n8n HTTP
@@ -42,7 +42,7 @@ Sheets, a database node, a webhook trigger). The HTTP Request node:
 | Field | Value |
 | --- | --- |
 | Method | `POST` |
-| URL | `http://localhost:8080/v1/templates/story_pricing_pro/render` |
+| URL | `http://localhost:8123/v1/templates/story_pricing_pro/render` |
 | Body | JSON: `{ "TITLE": "{{$json.title}}", "PRICE": "{{$json.price}}" }` |
 | Response Format | **File** (so the node output is a binary item, ready for e.g. Telegram `sendPhoto`) |
 | Header (optional) | `X-API-Key: {{$env.EAVEXA_API_KEY}}` |
@@ -103,7 +103,7 @@ path is still the right tool (renders triggered by something other than n8n itse
 
 - **`ECONNREFUSED`** — `eavexa serve` isn't running, or `EAVEXA_HOST`/port don't match
   the URL in the HTTP Request node. `eavexa doctor` on the EAVexa side doesn't check this
-  (it's not a dependency check); confirm with `curl http://localhost:8080/healthz`.
+  (it's not a dependency check); confirm with `curl http://localhost:8123/healthz`.
 - **`401`** — `EAVEXA_API_KEY` is set on the EAVexa side but the request has no (or the
   wrong) `X-API-Key` header.
 - **Wait node never resumes** — check `eavexa jobs list --status failed` /

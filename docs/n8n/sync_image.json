@@ -28,7 +28,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:8080/v1/templates/story_pricing_pro/render",
+        "url": "http://localhost:8123/v1/templates/story_pricing_pro/render",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

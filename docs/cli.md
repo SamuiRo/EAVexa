@@ -20,6 +20,21 @@ node src/cli/cli.js <command> ...     # from the project directory
 Once published, `npm install -g eavexa` (or `npx eavexa`) exposes the `eavexa` binary
 directly (`package.json` declares `bin.eavexa`).
 
+`package.json` also has shortcuts for the most common commands, so you don't have to
+type the full path:
+
+```bash
+npm run serve      # eavexa serve
+npm run doctor     # eavexa doctor
+npm run templates  # eavexa templates
+npm run formats    # eavexa formats
+npm run jobs       # eavexa jobs
+npm run render -- -t story_pricing_pro --var TITLE="Hi" -o ./out.png
+```
+
+Flags after `--` are passed straight through to the underlying command (npm's own rule,
+not an EAVexa one).
+
 ## Commands
 
 ```text
@@ -29,7 +44,7 @@ eavexa templates  <list|show> [name]
 eavexa formats
 eavexa doctor
 eavexa jobs       <list|show|cancel|prune|stats>
-eavexa serve      [--port 8080]           # HTTP API — see docs/api.md
+eavexa serve      [--port 8123]           # HTTP API — see docs/api.md
 ```
 
 Every command supports `--help` and, where it makes sense, `--json` for machine-readable
@@ -189,7 +204,7 @@ Starts the HTTP API — `POST /v1/render`, `GET /v1/jobs/*`, etc. Full reference
 `docs/api.md` (+ `docs/openapi.yaml`).
 
 ```bash
-eavexa serve --port 8080
+eavexa serve --port 8123
 ```
 
 `SIGTERM`/`SIGINT` trigger a graceful shutdown: stop accepting new connections, wait up to

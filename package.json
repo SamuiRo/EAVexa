@@ -1,6 +1,6 @@
 {
   "name": "eavexa",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Render HTML templates to PNG images and MP4/WebM/MOV/MKV videos, via CLI, HTTP API, or a jobs.json batch runner",
   "type": "module",
   "main": "src/index.js",
@@ -19,6 +19,12 @@
   ],
   "scripts": {
     "start": "node src/index.js",
+    "serve": "node src/cli/cli.js serve",
+    "render": "node src/cli/cli.js render",
+    "doctor": "node src/cli/cli.js doctor",
+    "templates": "node src/cli/cli.js templates",
+    "formats": "node src/cli/cli.js formats",
+    "jobs": "node src/cli/cli.js jobs",
     "lint": "node scripts/check_syntax.mjs",
     "test": "node scripts/run_tests.mjs"
   },

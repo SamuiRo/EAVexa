@@ -43,7 +43,7 @@ npx eavexa render -t story_pricing_pro --var TITLE="Launch week" -o ./out.png
 Сервер:
 
 ```bash
-npx eavexa serve                       # http://localhost:8080
+npx eavexa serve                       # http://localhost:8123
 ```
 
 Нічого більше не потрібно: `data/` створюється лениво, `OUTPUT_DIR` за замовчуванням
@@ -493,7 +493,7 @@ job.status='running' → фази з оновленням progress
   "storage":    "local",
   "path":       "/data/outputs/2026-07-25/j_01JB2K/promo.mp4",   // з OUTPUT_DIR_ALIAS
   "local_path": "S:\\…\\data\\outputs\\2026-07-25\\j_01JB2K\\promo.mp4",
-  "url":        "http://localhost:8080/v1/jobs/j_01JB2K/result",
+  "url":        "http://localhost:8123/v1/jobs/j_01JB2K/result",
   "data":       null,                                             // base64 на запит
 
   "timings": { "total_ms": 18422, "load_ms": 812, "capture_ms": 12903,
@@ -814,7 +814,7 @@ templates/story_pricing_pro/
 | `JOB_STORE_DIR` | `data/jobs` | записи джобів |
 | `TMP_DIR` | `os.tmpdir()` | кадри відео |
 | **Сервер** | | |
-| `EAVEXA_PORT` / `EAVEXA_HOST` | `8080` / `127.0.0.1` | HTTP |
+| `EAVEXA_PORT` / `EAVEXA_HOST` | `8123` / `127.0.0.1` | HTTP |
 | `EAVEXA_API_KEY` | `null` | якщо задано — потрібен `X-API-Key` |
 | `EAVEXA_PUBLIC_URL` | `null` | інакше — з `X-Forwarded-*` / `Host` |
 | `MAX_BODY_MB` | `10` | ліміт тіла |
@@ -868,7 +868,7 @@ templates/story_pricing_pro/
 ```bash
 eavexa render     [опції]                    # один рендер
 eavexa batch      [--jobs data/jobs.json]    # legacy-режим
-eavexa serve      [--port 8080]
+eavexa serve      [--port 8123]
 eavexa templates  <list|show|preview|validate|new>
 eavexa jobs       <list|show|cancel|prune|stats>
 eavexa formats
@@ -1088,7 +1088,7 @@ eavexa render -t story_faq --watch --open       # ре-рендер при зм�
 ```text
 [Schedule] → [Google Sheets: read row]
           → [HTTP Request]
-               POST http://localhost:8080/v1/templates/story_pricing_pro/render
+               POST http://localhost:8123/v1/templates/story_pricing_pro/render
                Body: { "TITLE": "{{$json.title}}", "PRICE": "{{$json.price}}" }
                Response Format: File
           → [Telegram: sendPhoto]
@@ -1098,7 +1098,7 @@ eavexa render -t story_faq --watch --open       # ре-рендер при зм�
 
 ```text
 [Schedule] → [HTTP Request]
-               POST http://localhost:8080/v1/render
+               POST http://localhost:8123/v1/render
                { "template": {"name":"promo"}, "video": {"duration":30},
                  "callback_url": "{{$execution.resumeUrl}}",
                  "metadata": {"row_id":"{{$json.id}}"} }

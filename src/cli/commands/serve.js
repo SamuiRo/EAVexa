@@ -12,7 +12,7 @@ const HELP = `Usage: eavexa serve [options]
 Start the HTTP API server — see docs/api.md for the full route reference.
 
 Options:
-  -p, --port <n>    Port to listen on (default: EAVEXA_PORT env, else 8080)
+  -p, --port <n>    Port to listen on (default: EAVEXA_PORT env, else 8123)
       --host <ip>   Host to bind (default: EAVEXA_HOST env, else 127.0.0.1)`;
 
 export default async function serve_command(argv) {

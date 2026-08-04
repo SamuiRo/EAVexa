@@ -12,9 +12,9 @@ COPY . .
 
 ENV NODE_ENV=production \
     EAVEXA_HOST=0.0.0.0 \
-    EAVEXA_PORT=8080 \
+    EAVEXA_PORT=8123 \
     CHROME_SANDBOX=auto
 
-EXPOSE 8080
+EXPOSE 8123
 
 CMD ["node", "src/cli/cli.js", "serve"]

@@ -79,7 +79,7 @@ export const WEBHOOK_ALLOWED_HOSTS = process.env.WEBHOOK_ALLOWED_HOSTS
 
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 
-export const EAVEXA_PORT   = Number(process.env.EAVEXA_PORT ?? 8080);
+export const EAVEXA_PORT   = Number(process.env.EAVEXA_PORT ?? 8123);
 export const EAVEXA_HOST   = process.env.EAVEXA_HOST ?? '127.0.0.1';
 export const EAVEXA_API_KEY = process.env.EAVEXA_API_KEY ?? null;
 export const EAVEXA_PUBLIC_URL = process.env.EAVEXA_PUBLIC_URL ?? null;

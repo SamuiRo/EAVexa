@@ -74,7 +74,7 @@ nssm install EAVexa "C:\Program Files\nodejs\node.exe" "src\cli\cli.js serve"
 nssm set EAVexa AppDirectory "S:\Daedalus\Aureum\EAVexa"
 nssm set EAVexa AppStdout "S:\Daedalus\Aureum\EAVexa\data\logs\eavexa.out.log"
 nssm set EAVexa AppStderr "S:\Daedalus\Aureum\EAVexa\data\logs\eavexa.err.log"
-nssm set EAVexa AppEnvironmentExtra EAVEXA_PORT=8080 EAVEXA_HOST=127.0.0.1
+nssm set EAVexa AppEnvironmentExtra EAVEXA_PORT=8123 EAVEXA_HOST=127.0.0.1
 nssm start EAVexa
 ```
 

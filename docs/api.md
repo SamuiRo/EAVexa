@@ -7,7 +7,7 @@ request/response flow from n8n possible for the first time (no more Execute Comm
 blocking for the render's full duration).
 
 ```bash
-eavexa serve --port 8080
+eavexa serve --port 8123
 ```
 
 See `docs/cli.md` for the CLI, `docs/architecture.md` for the internals, and
@@ -235,7 +235,7 @@ reference.
 ```text
 [Schedule] → [Google Sheets: read row]
           → [HTTP Request]
-               POST http://localhost:8080/v1/templates/story_pricing_pro/render
+               POST http://localhost:8123/v1/templates/story_pricing_pro/render
                Body: { "TITLE": "{{$json.title}}", "PRICE": "{{$json.price}}" }
                Response Format: File
           → [Telegram: sendPhoto]
@@ -245,7 +245,7 @@ reference.
 
 ```text
 [Schedule] → [HTTP Request]
-               POST http://localhost:8080/v1/render
+               POST http://localhost:8123/v1/render
                { "source": {"name":"promo"}, "video": {"duration":30},
                  "callback_url": "{{$execution.resumeUrl}}",
                  "metadata": {"row_id":"{{$json.id}}"} }

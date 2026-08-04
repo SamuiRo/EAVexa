@@ -11,7 +11,7 @@ services:
     init: true          # reaps zombie Chromium/FFmpeg child processes
     shm_size: 1gb        # Chromium needs real /dev/shm, Docker's 64MB default crashes it
     ports:
-      - "8080:8080"
+      - "8123:8123"
     volumes:
       - eavexa_output:/data/outputs
       - eavexa_jobs:/data/jobs

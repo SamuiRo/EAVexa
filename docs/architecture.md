@@ -308,7 +308,7 @@ Current environment-backed settings (see `.env.example`):
 | `WEBHOOK_ALLOW_PRIVATE` / `WEBHOOK_ALLOWED_HOSTS` | Allow localhost/LAN webhook targets (default `true` — the common n8n-on-the-same-host case), or restrict to an explicit hostname allowlist. |
 | `TMP_DIR` | Where video frames and in-progress encodes live (default `os.tmpdir()`). |
 | `TEMPLATE_ALLOWED_HOSTS` | Optional comma-separated allowlist for `source.url` template fetches (SSRF guard). |
-| `EAVEXA_PORT` / `EAVEXA_HOST` | `eavexa serve` bind address (default `8080` / `127.0.0.1`). |
+| `EAVEXA_PORT` / `EAVEXA_HOST` | `eavexa serve` bind address (default `8123` / `127.0.0.1`). |
 | `EAVEXA_API_KEY` | If set, every `/v1/*` route requires a matching `X-API-Key`. Unset = open access. |
 | `EAVEXA_PUBLIC_URL` | Overrides the inferred base URL for `result.url`/`poll_url` — needed behind a reverse proxy or in a container where `Host` isn't reliable. |
 | `MAX_BODY_MB` | Max HTTP request body size before `PAYLOAD_TOO_LARGE` (default `10`). |
